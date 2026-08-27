@@ -15,6 +15,9 @@ import {
   fetchPluginFeed,
   loadPluginInstance,
   forceLoadPluginInstance,
+  buildDescriptor,
+  setCachedPluginCode,
+  executePluginCode,
 } from '../lib/pluginHost'
 
 const decodeHtmlEntities = (value: string): string => {
@@ -423,6 +426,9 @@ export interface PluginStoreState {
   importDefaultFeeds: () => Promise<void>
   clearAllSubscriptions: () => void
   
+  // 单插件导入
+  importSinglePlugin: (source: string | File, name?: string) => Promise<void>
+  
   // 用户变量
   pluginUserVariables: Record<string, Record<string, string>>
   setUserVariable: (pluginId: string, key: string, value: string) => void
@@ -584,6 +590,88 @@ export const usePluginStore = create<PluginStoreState>((set, get) => ({
       saveSubscriptions(rollbackSubscriptions)
       throw error
     }
+  },
+
+  // 单插件导入（支持 URL 或本地 .js 文件）
+  importSinglePlugin: async (source: string | File, name?: string) => {
+    let code: string
+    let pluginUrl: string
+    let pluginName: string
+
+    if (source instanceof File) {
+      // 本地文件上传
+      code = await source.text()
+      pluginName = name || source.name.replace(/\.js$/i, '')
+      pluginUrl = `local://${source.name}`
+    } else {
+      // URL 导入
+      pluginUrl = source.trim()
+      pluginName = name || pluginUrl.split('/').pop()?.replace(/\.js$/i, '') || '未命名插件'
+      try {
+        const res = await fetch(pluginUrl, { cache: 'no-store' })
+        if (!res.ok) throw new Error(`HTTP ${res.status}`)
+        code = await res.text()
+      } catch (e) {
+        throw new Error(`无法下载插件：${e instanceof Error ? e.message : String(e)}`)
+      }
+    }
+
+    // 确保"本地插件"订阅源存在
+    const LOCAL_SUB_ID = 'local-plugins'
+    const localSub = get().subscriptions.find(s => s.id === LOCAL_SUB_ID)
+    if (!localSub) {
+      const newSub: Subscription = {
+        id: LOCAL_SUB_ID,
+        url: 'local://',
+        name: '本地插件',
+        addedAt: Date.now(),
+        lastUpdated: Date.now(),
+      }
+      const subs = [...get().subscriptions, newSub]
+      set({ subscriptions: subs })
+      saveSubscriptions(subs)
+    }
+
+    // 构建描述符并加载
+    const descriptor = buildDescriptor({
+      name: pluginName,
+      url: pluginUrl,
+      version: '1.0.0',
+    })
+    descriptor.id = `${LOCAL_SUB_ID}:${pluginName}:${Date.now()}`
+
+    // 缓存代码
+    setCachedPluginCode(descriptor.id, pluginUrl, code, '1.0.0')
+
+    // 尝试执行验证
+    try {
+      await executePluginCode(code, descriptor)
+    } catch (e) {
+      throw new Error(`插件加载失败：${e instanceof Error ? e.message : String(e)}`)
+    }
+
+    // 更新插件缓存
+    const caches = loadPluginsCache()
+    const existingCache = caches.find(c => c.subscriptionId === LOCAL_SUB_ID)
+    const newPluginDescriptor: PluginDescriptor = {
+      name: pluginName,
+      url: pluginUrl,
+      version: '1.0.0',
+    }
+    if (existingCache) {
+      existingCache.plugins.push(newPluginDescriptor)
+      existingCache.timestamp = Date.now()
+    } else {
+      caches.push({
+        subscriptionId: LOCAL_SUB_ID,
+        plugins: [newPluginDescriptor],
+        timestamp: Date.now(),
+      })
+    }
+    savePluginsCache(caches)
+
+    // 重新加载所有插件
+    await get().loadAllPlugins()
   },
   
   // 移除订阅源

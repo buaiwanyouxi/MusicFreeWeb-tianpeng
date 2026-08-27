@@ -1,4 +1,4 @@
-import { useState } from 'react'
+import { useState, useRef } from 'react'
 import { motion, AnimatePresence } from 'framer-motion'
 import {
   Plus,
@@ -289,7 +289,12 @@ function SubscriptionsTab() {
           </motion.div>
         )}
       </AnimatePresence>
-      
+
+      {/* 单插件导入 */}
+      <SinglePluginImport
+        importSinglePlugin={usePluginStore.getState().importSinglePlugin}
+      />
+
         {/* 统计信息 */}
         <div className="flex items-center gap-4 mb-4 text-sm">
         <div className="flex items-center gap-1.5 text-surface-400">
@@ -658,6 +663,151 @@ function SubscriptionsTab() {
         )}
         </div>
       </div>
+    </div>
+  )
+}
+
+// 单插件导入组件
+function SinglePluginImport({ importSinglePlugin }: { importSinglePlugin: (source: string | File, name?: string) => Promise<void> }) {
+  const [showForm, setShowForm] = useState(false)
+  const [pluginUrl, setPluginUrl] = useState('')
+  const [pluginName, setPluginName] = useState('')
+  const [importing, setImporting] = useState(false)
+  const [importError, setImportError] = useState<string | null>(null)
+  const [importSuccess, setImportSuccess] = useState<string | null>(null)
+  const fileInputRef = useRef<HTMLInputElement>(null)
+
+  const handleUrlImport = async () => {
+    if (!pluginUrl.trim()) return
+    setImporting(true)
+    setImportError(null)
+    setImportSuccess(null)
+    try {
+      await importSinglePlugin(pluginUrl.trim(), pluginName.trim() || undefined)
+      setImportSuccess(`插件 ${pluginName.trim() || pluginUrl.trim().split('/').pop()} 导入成功`)
+      setPluginUrl('')
+      setPluginName('')
+    } catch (error) {
+      setImportError(error instanceof Error ? error.message : '导入失败')
+    } finally {
+      setImporting(false)
+    }
+  }
+
+  const handleFileImport = (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0]
+    if (!file) return
+    setImporting(true)
+    setImportError(null)
+    setImportSuccess(null)
+    importSinglePlugin(file)
+      .then(() => {
+        setImportSuccess(`插件 ${file.name} 导入成功`)
+      })
+      .catch((error) => {
+        setImportError(error instanceof Error ? error.message : '导入失败')
+      })
+      .finally(() => {
+        setImporting(false)
+      })
+    e.target.value = ''
+  }
+
+  return (
+    <div className="mb-4">
+      <button
+        onClick={() => setShowForm(!showForm)}
+        className="w-full flex items-center gap-2 p-3 glass rounded-xl hover:bg-surface-700/30 transition-colors text-left"
+      >
+        <div className="w-10 h-10 rounded-lg bg-gradient-to-br from-primary-500/20 to-primary-600/20 flex items-center justify-center flex-shrink-0">
+          <Download className="w-5 h-5 text-primary-400" />
+        </div>
+        <div className="flex-1">
+          <p className="text-sm font-medium text-surface-200">单插件导入</p>
+          <p className="text-xs text-surface-500">通过 URL 或本地 .js 文件导入单个插件</p>
+        </div>
+        <ChevronDown className={`w-4 h-4 text-surface-500 transition-transform duration-200 ${showForm ? 'rotate-180' : ''}`} />
+      </button>
+
+      <AnimatePresence>
+        {showForm && (
+          <motion.div
+            initial={{ height: 0, opacity: 0 }}
+            animate={{ height: 'auto', opacity: 1 }}
+            exit={{ height: 0, opacity: 0 }}
+            transition={{ duration: 0.2 }}
+            className="overflow-hidden"
+          >
+            <div className="glass rounded-xl p-4 mt-3 space-y-4">
+              {/* URL 导入 */}
+              <div>
+                <p className="text-xs text-surface-400 mb-2">通过 URL 导入</p>
+                <div className="space-y-2">
+                  <input
+                    type="url"
+                    value={pluginUrl}
+                    onChange={(e) => { setPluginUrl(e.target.value); setImportError(null); setImportSuccess(null) }}
+                    placeholder="https://example.com/plugin.js"
+                    className="w-full bg-surface-800 rounded-lg py-2.5 px-3 text-sm text-surface-100 placeholder-surface-500"
+                  />
+                  <input
+                    type="text"
+                    value={pluginName}
+                    onChange={(e) => setPluginName(e.target.value)}
+                    placeholder="插件名称（可选）"
+                    className="w-full bg-surface-800 rounded-lg py-2.5 px-3 text-sm text-surface-100 placeholder-surface-500"
+                  />
+                  <button
+                    onClick={handleUrlImport}
+                    disabled={importing || !pluginUrl.trim()}
+                    className="w-full flex items-center justify-center gap-2 px-4 py-2.5 rounded-lg bg-primary-500 text-surface-950 text-sm font-medium hover:bg-primary-400 transition-colors disabled:opacity-50"
+                  >
+                    {importing ? (
+                      <><Loader2 className="w-4 h-4 animate-spin" /><span>导入中...</span></>
+                    ) : (
+                      <><Download className="w-4 h-4" /><span>导入插件</span></>
+                    )}
+                  </button>
+                </div>
+              </div>
+
+              {/* 文件导入 */}
+              <div>
+                <p className="text-xs text-surface-400 mb-2">通过本地文件导入</p>
+                <input
+                  ref={fileInputRef}
+                  type="file"
+                  accept=".js"
+                  onChange={handleFileImport}
+                  className="hidden"
+                />
+                <button
+                  onClick={() => fileInputRef.current?.click()}
+                  disabled={importing}
+                  className="w-full flex items-center justify-center gap-2 px-4 py-2.5 rounded-lg bg-surface-800 text-surface-300 text-sm hover:bg-surface-700 transition-colors disabled:opacity-50"
+                >
+                  <Download className="w-4 h-4" />
+                  <span>选择 .js 文件</span>
+                </button>
+              </div>
+
+              {/* 状态提示 */}
+              {importError && (
+                <div className="flex items-center gap-2 text-red-400 text-sm">
+                  <AlertCircle className="w-4 h-4" />
+                  <span>{importError}</span>
+                </div>
+              )}
+              {importSuccess && (
+                <div className="flex items-center gap-2 text-green-400 text-sm">
+                  <CheckCircle2 className="w-4 h-4" />
+                  <span>{importSuccess}</span>
+                </div>
+              )}
+            </div>
+          </motion.div>
+        )}
+      </AnimatePresence>
     </div>
   )
 }

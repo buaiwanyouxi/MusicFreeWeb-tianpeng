@@ -1446,7 +1446,7 @@ const createRequireShim = (proxiedFetch: typeof fetch) => {
   }
 }
 
-const executePluginCode = async (
+export const executePluginCode = async (
   code: string,
   descriptor: InstalledPlugin,
 ): Promise<MusicPlugin> => {
@@ -2211,7 +2211,7 @@ const getCachedPluginCode = (pluginId: string, url: string, version?: string): s
   return cached.code
 }
 
-const setCachedPluginCode = (pluginId: string, url: string, code: string, version?: string) => {
+export const setCachedPluginCode = (pluginId: string, url: string, code: string, version?: string) => {
   const cache = loadPluginCodeCache()
   cache[pluginId] = {
     code,
