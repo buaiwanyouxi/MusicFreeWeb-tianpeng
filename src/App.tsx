@@ -1,6 +1,6 @@
 import { useEffect, useState, useRef, useCallback } from 'react'
 import { motion, AnimatePresence } from 'framer-motion'
-import { Music2, Rss, ListMusic, Search, Radio, ChevronDown, RefreshCw } from 'lucide-react'
+import { Music2, ListMusic, Search, Radio, ChevronDown, RefreshCw, Settings } from 'lucide-react'
 import { usePluginStore } from './stores/pluginStore'
 import { usePlayerStore } from './stores/playerStore'
 import { parseLRC, getCurrentLyric } from './lib/lyrics'
@@ -10,15 +10,15 @@ import type { PluginTrack } from './types/plugin'
 import { Player } from './components/Player'
 import { SearchView } from './components/SearchView'
 import { PlaylistView } from './components/PlaylistView'
-import { PluginManager } from './components/PluginManager'
 import { MiniPlayer } from './components/MiniPlayer'
+import { SettingsView } from './components/SettingsView'
 
-type TabId = 'search' | 'playlist' | 'plugins'
+type TabId = 'search' | 'playlist' | 'settings'
 
 const tabs = [
   { id: 'search' as const, icon: Search, label: '搜索' },
   { id: 'playlist' as const, icon: ListMusic, label: '列表' },
-  { id: 'plugins' as const, icon: Rss, label: '订阅' },
+  { id: 'settings' as const, icon: Settings, label: '设置' },
 ]
 
 function App() {
@@ -1304,10 +1304,10 @@ function App() {
           </div>
           <div
             className={`absolute inset-0 h-full overflow-hidden transition-opacity duration-200 ${
-              activeTab === 'plugins' ? 'opacity-100 z-10' : 'opacity-0 z-0 pointer-events-none'
+              activeTab === 'settings' ? 'opacity-100 z-10' : 'opacity-0 z-0 pointer-events-none'
             }`}
           >
-            <PluginManager />
+            <SettingsView />
           </div>
         </div>
       </main>
