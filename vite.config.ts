@@ -654,12 +654,37 @@ export default defineConfig({
         rewrite: (path) => path.replace(/^\/api\/proxy\/buguomusic/, ''),
         headers: { ...commonHeaders, referer: 'https://buguomusic.com/' },
       },
-      // ============ 歌词网 ============
+      // ============ 歌词网 (followlyrics 实际站点为 zh 子域) ============
       '/api/proxy/followlyrics': {
-        target: 'https://www.followlyrics.com',
+        target: 'https://zh.followlyrics.com',
         changeOrigin: true,
         rewrite: (path) => path.replace(/^\/api\/proxy\/followlyrics/, ''),
-        headers: { ...commonHeaders },
+        headers: { ...commonHeaders, referer: 'https://zh.followlyrics.com/' },
+      },
+      // ============ 布谷音乐 (tianpeng 插件) ============
+      '/api/proxy/buguyy': {
+        target: 'https://www.buguyy.top',
+        changeOrigin: true,
+        rewrite: (path) => path.replace(/^\/api\/proxy\/buguyy/, ''),
+        headers: { ...commonHeaders, referer: 'https://www.buguyy.top/' },
+      },
+      '/api/proxy/kuwo_www': {
+        target: 'https://www.kuwo.cn',
+        changeOrigin: true,
+        rewrite: (path) => path.replace(/^\/api\/proxy\/kuwo_www/, ''),
+        headers: { ...commonHeaders, referer: 'https://www.kuwo.cn/' },
+      },
+      '/api/proxy/qq_html': {
+        target: 'https://y.qq.com',
+        changeOrigin: true,
+        rewrite: (path) => path.replace(/^\/api\/proxy\/qq_html/, ''),
+        headers: { ...commonHeaders, referer: 'https://y.qq.com/' },
+      },
+      '/api/proxy/kugou_www': {
+        target: 'https://www.kugou.com',
+        changeOrigin: true,
+        rewrite: (path) => path.replace(/^\/api\/proxy\/kugou_www/, ''),
+        headers: { ...commonHeaders, referer: 'https://www.kugou.com/' },
       },
     },
   },

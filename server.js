@@ -204,9 +204,28 @@ const proxyTargets = {
     headers: { referer: 'https://buguomusic.com/' },
   },
 
-  // ============ 歌词网 ============
+  // ============ 歌词网 (followlyrics 实际站点为 zh 子域) ============
   followlyrics: {
-    target: 'https://www.followlyrics.com',
+    target: 'https://zh.followlyrics.com',
+    headers: { referer: 'https://zh.followlyrics.com/' },
+  },
+
+  // ============ 布谷音乐 (tianpeng 插件) ============
+  buguyy: {
+    target: 'https://www.buguyy.top',
+    headers: { referer: 'https://www.buguyy.top/' },
+  },
+  kuwo_www: {
+    target: 'https://www.kuwo.cn',
+    headers: { referer: 'https://www.kuwo.cn/' },
+  },
+  qq_html: {
+    target: 'https://y.qq.com',
+    headers: { referer: 'https://y.qq.com/' },
+  },
+  kugou_www: {
+    target: 'https://www.kugou.com',
+    headers: { referer: 'https://www.kugou.com/' },
   },
 
   // ============ 插件加载所需 ============
@@ -426,7 +445,7 @@ const server = createServer(async (req, res) => {
       }
 
       // 复制原始请求的某些头
-      const forwardHeaders = ['content-type', 'accept', 'accept-language']
+      const forwardHeaders = ['content-type', 'accept', 'accept-language', 'secret']
       for (const header of forwardHeaders) {
         const value = req.headers[header.toLowerCase()]
         if (value) {

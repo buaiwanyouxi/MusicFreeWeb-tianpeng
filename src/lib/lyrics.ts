@@ -10,11 +10,22 @@ export function parseLRC(lrcText: string): LyricLine[] {
     return []
   }
 
+  // 非标时间戳归一化：[总秒数]（如布谷音乐 about 的 [14.98]）→ [mm:ss.mmm]
+  const normalized = lrcText.replace(/\[(\d{1,4}(?:\.\d{1,3}))\](?!:)/g, (_m, secStr) => {
+    const total = Number(secStr)
+    if (Number.isNaN(total)) return _m
+    const mm = Math.floor(total / 60)
+    const ss = total % 60
+    const mmStr = String(mm).padStart(2, '0')
+    const ssStr = ss.toFixed(2).padStart(5, '0')
+    return '[' + mmStr + ':' + ssStr + ']'
+  })
+
   const lines: LyricLine[] = []
-  const linesArray = lrcText.split('\n')
+  const linesArray = normalized.split('\n')
 
   // 时间戳正则：[mm:ss.xx] 或 [mm:ss]
-  const timeRegex = /\[(\d{2}):(\d{2})(?:\.(\d{2,3}))?\]/g
+  const timeRegex = /\[(\d{2}):([01]?\d|2\d)(?:\.(\d{2,3}))?\]/g
 
   for (const line of linesArray) {
     const trimmed = line.trim()

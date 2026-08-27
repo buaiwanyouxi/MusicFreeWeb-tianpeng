@@ -2,6 +2,10 @@ import React from 'react'
 import ReactDOM from 'react-dom/client'
 import App from './App'
 import './styles/index.css'
+import { installPluginGuards } from './lib/pluginSandbox'
+
+// 安装插件隐私守卫（localStorage 屏蔽 + 越权外发审计），必须先于任何插件代码执行
+installPluginGuards()
 
 // 注册 Service Worker
 if ('serviceWorker' in navigator) {

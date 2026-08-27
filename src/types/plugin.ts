@@ -109,6 +109,8 @@ export type MusicPlugin = {
   getRecommendSheetsByTag?(tag: PluginRecommendTag | string, page?: number): Promise<SearchResult<PluginPlaylist>>
   importMusicSheet?(url: string): Promise<PluginPlaylist & { tracks?: PluginTrack[] }>
   importVideo?(url: string): Promise<PluginPlaylist & { tracks?: PluginTrack[] }>
+  /** 内部：官方协议原生插件引用（adaptMusicFreePlugin 注入，供歌词链直调 getLyric） */
+  __nativePlugin?: unknown
 }
 
 export type LoadedPlugin = {

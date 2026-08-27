@@ -34,6 +34,13 @@ import type {
   MusicPlugin,
 } from '../types/plugin'
 
+const formatTrackDuration = (s?: number) => {
+  if (!s || s <= 0 || !Number.isFinite(s)) return ''
+  const m = Math.floor(s / 60)
+  const sec = Math.floor(s % 60)
+  return m + ':' + String(sec).padStart(2, '0')
+}
+
 const searchTabs: { id: SearchType; label: string; icon: typeof Music }[] = [
   { id: 'music', label: '歌曲', icon: Music },
   { id: 'artist', label: '歌手', icon: User },
@@ -644,6 +651,7 @@ function TrackList({
                 <p className="text-xs text-surface-400 truncate mt-0.5">
                   {track.artists?.join(' / ') || '未知艺术家'}
                   {track.album && ` · ${track.album}`}
+                  {formatTrackDuration(track.duration) && ` · ${formatTrackDuration(track.duration)}`}
                 </p>
               </div>
               
@@ -1530,7 +1538,7 @@ function DetailView({
                       <h4 className="text-sm font-medium text-surface-100 truncate">{track.title}</h4>
                       <CachedIcon trackId={track.id} />
                     </div>
-                    <p className="text-xs text-surface-400 truncate mt-0.5">{track.artists?.join(' / ')}</p>
+                    <p className="text-xs text-surface-400 truncate mt-0.5">{track.artists?.join(' / ')}{formatTrackDuration(track.duration) && ` · ${formatTrackDuration(track.duration)}`}</p>
                   </div>
                   <button
                     onClick={(e) => { e.stopPropagation(); onAddToPlaylist(track) }}

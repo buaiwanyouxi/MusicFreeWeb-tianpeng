@@ -46,7 +46,7 @@ const debugLog = (type: DebugLogType, message: string, data?: unknown) => {
 }
 
 // 沙箱守卫（pluginSandbox）审计日志 → 桥接调试日志系统
-setSandboxLogSink((type, message) => debugLog(type, message))
+setSandboxLogSink((type: 'info' | 'error', message: string) => debugLog(type, message))
 
 const now = () => Date.now()
 
