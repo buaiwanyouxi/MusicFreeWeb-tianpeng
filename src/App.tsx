@@ -6,6 +6,8 @@ import { usePlayerStore } from './stores/playerStore'
 import { parseLRC, getCurrentLyric } from './lib/lyrics'
 import { loadSongCache, saveSongCache, deleteSongCache } from './lib/songCache'
 import { needsMSEPlayback, loadMSEAudio, cleanupMSE, isMSESupported } from './lib/msePlayer'
+import { initLanguage } from './lib/i18n'
+import { startTimer, clearTimer } from './lib/sleepTimer'
 import type { PluginTrack } from './types/plugin'
 import { Player } from './components/Player'
 import { SearchView } from './components/SearchView'
@@ -75,13 +77,57 @@ function App() {
   
   useEffect(() => {
     init()
-    
-    // 组件卸载时清理 blob URL
+
+    // 初始化语言和主题
+    initLanguage()
+    const savedTheme = localStorage.getItem('musicfree.theme') as 'light' | 'dark' | 'system' | null
+    if (savedTheme) {
+      const root = document.documentElement
+      if (savedTheme === 'system') {
+        const isDark = window.matchMedia('(prefers-color-scheme: dark)').matches
+        root.classList.toggle('light-theme', !isDark)
+      } else {
+        root.classList.toggle('light-theme', savedTheme === 'light')
+      }
+    }
+
+    // 初始化字体大小
+    const savedFontSize = localStorage.getItem('musicfree.fontSize')
+    if (savedFontSize) {
+      const sizeMap: Record<string, string> = { small: '14px', medium: '16px', large: '18px' }
+      document.documentElement.style.fontSize = sizeMap[savedFontSize] || '16px'
+    }
+
+    // 初始化壁纸
+    const savedWallpaper = localStorage.getItem('musicfree.wallpaper')
+    if (savedWallpaper) {
+      document.body.style.backgroundImage = `url(${savedWallpaper})`
+      document.body.style.backgroundSize = 'cover'
+      document.body.style.backgroundPosition = 'center'
+      document.body.style.backgroundAttachment = 'fixed'
+    }
+
+    // 初始化定时关闭
+    const savedTimer = localStorage.getItem('musicfree.timer')
+    if (savedTimer && savedTimer !== 'off') {
+      const minutes = savedTimer === 'custom'
+        ? parseInt(localStorage.getItem('musicfree.timer.custom') || '45', 10)
+        : parseInt(savedTimer, 10)
+      if (minutes > 0) {
+        startTimer(minutes, () => {
+          usePlayerStore.getState().setIsPlaying(false)
+          audioRef.current?.pause()
+        })
+      }
+    }
+
+    // 组件卸载时清理 blob URL 和定时器
     return () => {
       if (currentBlobUrlRef.current) {
         URL.revokeObjectURL(currentBlobUrlRef.current)
         currentBlobUrlRef.current = null
       }
+      clearTimer()
     }
   }, [init])
   
