@@ -50,7 +50,7 @@ export function MiniPlayer({ onExpand, onRetry }: MiniPlayerProps) {
       animate={{ y: 0, opacity: 1 }}
       exit={{ y: 100, opacity: 0 }}
       transition={{ type: 'spring', damping: 25, stiffness: 300 }}
-      className="fixed bottom-[65px] left-0 right-0 z-40 px-4"
+      className="fixed bottom-[65px] left-0 right-0 z-40 px-4 lg:bottom-4 lg:left-[236px] lg:right-4"
     >
       <div className="glass rounded-2xl overflow-hidden glow-hover shadow-xl max-w-2xl mx-auto w-full">
         {/* 进度条 */}

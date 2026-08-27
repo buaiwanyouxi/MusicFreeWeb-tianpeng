@@ -1245,7 +1245,7 @@ function App() {
       </div>
       
       {/* 头部 */}
-      <header className="relative z-50 px-4 py-3 sm:px-6 sm:py-4 flex-shrink-0">
+      <header className="relative z-50 px-4 py-3 sm:px-6 sm:py-4 flex-shrink-0 lg:hidden">
         <div className="flex items-center justify-between max-w-2xl mx-auto w-full">
           <motion.div 
             className="flex items-center gap-2.5"
@@ -1331,8 +1331,88 @@ function App() {
         </div>
       </header>
       
-      {/* 主内容区 - 需要给底部导航留出空间 */}
-      <main className="flex-1 relative z-10 overflow-hidden pb-[65px]">
+      {/* 桌面端侧边栏导航 */}
+      <aside className="hidden lg:flex fixed left-0 top-0 bottom-0 z-20 w-[220px] flex-col border-r border-surface-800 bg-surface-950/95 backdrop-blur-xl">
+        <div className="flex items-center gap-3 px-5 py-5 border-b border-surface-800">
+          <div className="w-9 h-9 rounded-xl bg-primary-500/20 flex items-center justify-center">
+            <Music2 className="w-5 h-5 text-primary-400" />
+          </div>
+          <div>
+            <h1 className="text-sm font-bold text-surface-100">MusicFreeWeb</h1>
+            <p className="text-[10px] text-surface-500">插件化音乐播放器</p>
+          </div>
+        </div>
+        <nav className="flex-1 px-3 py-4 space-y-1">
+          {tabs.map((tab) => {
+            const isActive = activeTab === tab.id
+            return (
+              <button
+                key={tab.id}
+                onClick={() => setActiveTab(tab.id)}
+                className={`w-full flex items-center gap-3 px-4 py-3 rounded-xl text-sm font-medium transition-all duration-200 ${
+                  isActive
+                    ? 'bg-primary-500/15 text-primary-400'
+                    : 'text-surface-400 hover:text-surface-200 hover:bg-surface-800/50'
+                }`}
+              >
+                <tab.icon className={`w-5 h-5 flex-shrink-0 ${isActive ? 'drop-shadow-[0_0_8px_rgba(237,116,30,0.5)]' : ''}`} />
+                <span>{tab.label}</span>
+              </button>
+            )
+          })}
+        </nav>
+        {/* 侧边栏底部 - 插件选择 */}
+        <div className="px-3 pb-4 border-t border-surface-800 pt-3">
+          <div className="relative" data-plugin-select>
+            <button
+              onClick={() => setShowPluginSelect(!showPluginSelect)}
+              className="w-full flex items-center gap-2 px-3 py-2.5 rounded-xl bg-surface-800/50 border border-surface-700/50 hover:border-surface-600 transition-colors"
+            >
+              <Radio className="w-4 h-4 text-primary-400" />
+              <span className="text-xs text-surface-200 max-w-[120px] truncate">
+                {activePlugin?.meta.name || '选择源'}
+              </span>
+              <ChevronDown className={`w-4 h-4 text-surface-400 transition-transform ml-auto ${showPluginSelect ? 'rotate-180' : ''}`} />
+            </button>
+            <AnimatePresence>
+              {showPluginSelect && (
+                <motion.div
+                  initial={{ opacity: 0, y: 10, scale: 0.95 }}
+                  animate={{ opacity: 1, y: 0, scale: 1 }}
+                  exit={{ opacity: 0, y: 10, scale: 0.95 }}
+                  className="absolute z-[100] bottom-full left-0 right-0 mb-2 w-full glass rounded-xl overflow-hidden max-h-48 overflow-y-auto"
+                >
+                  {readyPlugins.length === 0 ? (
+                    <div className="px-4 py-4 text-center text-surface-400 text-xs">暂无可用插件</div>
+                  ) : (
+                    readyPlugins.map((plugin) => (
+                      <button
+                        key={plugin.meta.id}
+                        type="button"
+                        onClick={() => {
+                          setActivePlugin(plugin.meta.id, true)
+                          setShowPluginSelect(false)
+                        }}
+                        className={`w-full px-4 py-2.5 flex items-center gap-3 text-left hover:bg-surface-700/50 transition-colors ${
+                          activePluginId === plugin.meta.id ? 'bg-primary-500/10' : ''
+                        }`}
+                      >
+                        <div className={`w-2 h-2 rounded-full flex-shrink-0 ${
+                          activePluginId === plugin.meta.id ? 'bg-primary-400' : 'bg-surface-500'
+                        }`} />
+                        <span className="text-xs text-surface-200 truncate">{plugin.meta.name}</span>
+                      </button>
+                    ))
+                  )}
+                </motion.div>
+              )}
+            </AnimatePresence>
+          </div>
+        </div>
+      </aside>
+
+      {/* 主内容区 */}
+      <main className="flex-1 relative z-10 overflow-hidden pb-[65px] lg:pb-0 lg:ml-[220px]">
         <div className="h-full relative">
           <div
             className={`absolute inset-0 h-full overflow-hidden transition-opacity duration-200 ${
@@ -1357,16 +1437,16 @@ function App() {
           </div>
         </div>
       </main>
-      
+
       {/* 迷你播放器 - 固定在底部导航上方 */}
       <AnimatePresence>
         {currentTrack && !showPlayer && (
           <MiniPlayer onExpand={() => setShowPlayer(true)} onRetry={handleRetry} />
         )}
       </AnimatePresence>
-      
-      {/* 底部导航 - 固定在底部 */}
-      <nav className="fixed bottom-0 left-0 right-0 z-30 px-4 pb-safe bg-gradient-to-t from-surface-950 via-surface-950/95 to-transparent pt-3.5">
+
+      {/* 底部导航 - 仅移动端显示 */}
+      <nav className="fixed bottom-0 left-0 right-0 z-30 px-4 pb-safe bg-gradient-to-t from-surface-950 via-surface-950/95 to-transparent pt-3.5 lg:hidden">
         <div className="glass rounded-2xl p-1.5 max-w-2xl mx-auto w-full mb-2">
           <div className="flex">
             {tabs.map((tab) => {
@@ -1375,14 +1455,14 @@ function App() {
                 <button
                   key={tab.id}
                   onClick={() => setActiveTab(tab.id)}
-                  className={`flex-1 flex flex-row items-center justify-center gap-2 py-2 px-3 rounded-xl transition-all duration-200 ${
-                    isActive 
-                      ? 'bg-primary-500/20 text-primary-400' 
+                  className={`flex-1 flex flex-row items-center justify-center gap-2 py-2.5 px-3 rounded-xl transition-all duration-200 min-h-[44px] ${
+                    isActive
+                      ? 'bg-primary-500/20 text-primary-400'
                       : 'text-surface-400 hover:text-surface-200'
                   }`}
                 >
-                  <tab.icon className={`w-[18px] h-[18px] flex-shrink-0 ${isActive ? 'drop-shadow-[0_0_8px_rgba(237,116,30,0.5)]' : ''}`} />
-                  <span className="text-[11px] font-medium">{tab.label}</span>
+                  <tab.icon className={`w-5 h-5 flex-shrink-0 ${isActive ? 'drop-shadow-[0_0_8px_rgba(237,116,30,0.5)]' : ''}`} />
+                  <span className="text-xs font-medium">{tab.label}</span>
                 </button>
               )
             })}
