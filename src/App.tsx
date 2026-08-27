@@ -1,11 +1,12 @@
 import { useEffect, useState, useRef, useCallback } from 'react'
 import { motion, AnimatePresence } from 'framer-motion'
-import { Music2, ListMusic, Search, Radio, ChevronDown, RefreshCw, Settings } from 'lucide-react'
+import { Music2, ListMusic, Search, Radio, ChevronDown, RefreshCw, Settings, Rss, Palette, Clock, Info } from 'lucide-react'
 import { usePluginStore } from './stores/pluginStore'
 import { usePlayerStore } from './stores/playerStore'
 import { parseLRC, getCurrentLyric } from './lib/lyrics'
 import { loadSongCache, saveSongCache, deleteSongCache } from './lib/songCache'
 import { needsMSEPlayback, loadMSEAudio, cleanupMSE, isMSESupported } from './lib/msePlayer'
+import { runInPluginContext } from './lib/pluginSandbox'
 import { initLanguage } from './lib/i18n'
 import { startTimer, clearTimer } from './lib/sleepTimer'
 import type { PluginTrack } from './types/plugin'
@@ -14,12 +15,14 @@ import { SearchView } from './components/SearchView'
 import { PlaylistView } from './components/PlaylistView'
 import { MiniPlayer } from './components/MiniPlayer'
 import { SettingsView } from './components/SettingsView'
+import { PluginManager } from './components/PluginManager'
 
-type TabId = 'search' | 'playlist' | 'settings'
+type TabId = 'search' | 'playlist' | 'subscription' | 'settings'
 
 const tabs = [
   { id: 'search' as const, icon: Search, label: '搜索' },
   { id: 'playlist' as const, icon: ListMusic, label: '列表' },
+  { id: 'subscription' as const, icon: Rss, label: '订阅' },
   { id: 'settings' as const, icon: Settings, label: '设置' },
 ]
 
@@ -27,6 +30,8 @@ function App() {
   const [activeTab, setActiveTab] = useState<TabId>('search')
   const [showPlayer, setShowPlayer] = useState(false)
   const [showPluginSelect, setShowPluginSelect] = useState(false)
+  const [settingsExpanded, setSettingsExpanded] = useState(false)
+  const [settingsSubTab, setSettingsSubTab] = useState<'basic' | 'other' | 'about'>('basic')
   const audioRef = useRef<HTMLAudioElement>(null)
   const hasRestoredProgressRef = useRef(false)
   const currentAudioUrlRef = useRef<string>('')
@@ -96,6 +101,18 @@ function App() {
     if (savedFontSize) {
       const sizeMap: Record<string, string> = { small: '14px', medium: '16px', large: '18px' }
       document.documentElement.style.fontSize = sizeMap[savedFontSize] || '16px'
+    }
+
+    // 初始化字体
+    const savedFontFamily = localStorage.getItem('musicfree.fontFamily')
+    if (savedFontFamily) {
+      document.body.style.fontFamily = savedFontFamily
+    }
+
+    // 初始化强调色
+    const savedAccentColor = localStorage.getItem('musicfree.accentColor')
+    if (savedAccentColor) {
+      document.documentElement.style.setProperty('--color-primary', savedAccentColor)
     }
 
     // 初始化壁纸
@@ -580,56 +597,20 @@ function App() {
         }
       }
       
-      // 如果以上都没有找到，尝试直接调用插件的 getMediaSource 获取完整响应
+      // 如果还是没有找到，直接调用插件的 getLyric（官方协议；适配插件由适配层注入 __nativePlugin 引用）
+      // P0-1: 修复歌词原生链；P0-3: 移除 getMediaSource x 6 音质循环（避免放大 API 调用）
       if (!lyricsFound && currentTrack.extra) {
         try {
-          // 尝试直接访问原生插件的 getMediaSource 方法
           const pluginInstance = (plugin as any)
           const nativePlugin = pluginInstance.__nativePlugin || pluginInstance
-          
-          if (nativePlugin?.getMediaSource) {
-            console.log('[Lyrics] 尝试直接调用 getMediaSource 获取完整响应')
-            // 尝试不同的音质，获取完整响应
-            const qualities = ['128', 'standard', '320', 'high', 'low', 'super']
-            for (const quality of qualities) {
-              try {
-                const fullResult = await nativePlugin.getMediaSource(currentTrack.extra, quality)
-                console.log('[Lyrics] getMediaSource 完整返回:', JSON.stringify(fullResult).substring(0, 500))
-                
-                // 检查多种可能的格式
-                let lrcText: string | undefined
-                if ((fullResult as any)?.data?.lrc) {
-                  lrcText = (fullResult as any).data.lrc
-                } else if ((fullResult as any)?.lrc) {
-                  lrcText = (fullResult as any).lrc
-                } else if ((fullResult as any)?.rawLrc) {
-                  lrcText = (fullResult as any).rawLrc
-                }
-                
-                if (lrcText && typeof lrcText === 'string' && lrcText.trim().length > 0) {
-                  lyricsText = lrcText
-                  console.log('[Lyrics] 从 getMediaSource 完整响应中找到歌词，长度:', lrcText.length)
-                  const lyrics = parseLRC(lrcText)
-                  if (lyrics.length > 0) {
-                    setLyrics(lyrics)
-                    lyricsFound = true
-                    break
-                  }
-                }
-              } catch (e) {
-                continue
-              }
-            }
-          }
-          
-          // 如果还是没有，尝试 getLyric 方法
-          if (!lyricsFound && nativePlugin?.getLyric) {
+          if (typeof nativePlugin?.getLyric === 'function') {
             console.log('[Lyrics] 尝试使用 getLyric 方法获取歌词')
-            const lyricResult = await nativePlugin.getLyric(currentTrack.extra)
-            console.log('[Lyrics] getLyric 返回:', lyricResult)
-            if (lyricResult?.rawLrc && typeof lyricResult.rawLrc === 'string') {
-              lyricsText = lyricResult.rawLrc
-              const lyrics = parseLRC(lyricResult.rawLrc)
+            const lyricResult = await runInPluginContext(() => nativePlugin.getLyric(currentTrack.extra))
+            const rawLrc: string | undefined = lyricResult?.rawLrc
+            console.log('[Lyrics] getLyric 返回长度:', rawLrc ? rawLrc.length : 0)
+            if (rawLrc && typeof rawLrc === 'string' && rawLrc.trim().length > 0) {
+              lyricsText = rawLrc
+              const lyrics = parseLRC(rawLrc)
               console.log('[Lyrics] 从 getLyric 解析后的歌词行数:', lyrics.length)
               if (lyrics.length > 0) {
                 setLyrics(lyrics)
@@ -638,9 +619,10 @@ function App() {
             }
           }
         } catch (error) {
-          console.warn('[Lyrics] 直接调用插件方法失败:', error)
+          console.warn('[Lyrics] 调用插件 getLyric 失败:', error)
         }
       }
+
       
       if (!lyricsFound) {
         // 如果没有歌词，清空歌词列表
@@ -1342,13 +1324,13 @@ function App() {
             <p className="text-[10px] text-surface-500">插件化音乐播放器</p>
           </div>
         </div>
-        <nav className="flex-1 px-3 py-4 space-y-1">
-          {tabs.map((tab) => {
+        <nav className="flex-1 px-3 py-4 space-y-1 overflow-y-auto">
+          {tabs.filter(t => t.id !== 'settings').map((tab) => {
             const isActive = activeTab === tab.id
             return (
               <button
                 key={tab.id}
-                onClick={() => setActiveTab(tab.id)}
+                onClick={() => { setActiveTab(tab.id); setSettingsExpanded(false) }}
                 className={`w-full flex items-center gap-3 px-4 py-3 rounded-xl text-sm font-medium transition-all duration-200 ${
                   isActive
                     ? 'bg-primary-500/15 text-primary-400'
@@ -1360,6 +1342,58 @@ function App() {
               </button>
             )
           })}
+
+          {/* 设置 - 可折叠 */}
+          <div>
+            <button
+              onClick={() => {
+                const willExpand = !settingsExpanded
+                setSettingsExpanded(willExpand)
+                if (willExpand) {
+                  setActiveTab('settings')
+                }
+              }}
+              className={`w-full flex items-center gap-3 px-4 py-3 rounded-xl text-sm font-medium transition-all duration-200 ${
+                activeTab === 'settings'
+                  ? 'bg-primary-500/15 text-primary-400'
+                  : 'text-surface-400 hover:text-surface-200 hover:bg-surface-800/50'
+              }`}
+            >
+              <Settings className={`w-5 h-5 flex-shrink-0 ${activeTab === 'settings' ? 'drop-shadow-[0_0_8px_rgba(237,116,30,0.5)]' : ''}`} />
+              <span className="flex-1 text-left">设置</span>
+              <ChevronDown className={`w-4 h-4 transition-transform duration-200 ${settingsExpanded ? 'rotate-180' : ''}`} />
+            </button>
+            <AnimatePresence>
+              {settingsExpanded && (
+                <motion.div
+                  initial={{ height: 0, opacity: 0 }}
+                  animate={{ height: 'auto', opacity: 1 }}
+                  exit={{ height: 0, opacity: 0 }}
+                  transition={{ duration: 0.2 }}
+                  className="overflow-hidden ml-4 mt-1 space-y-0.5 border-l border-surface-700/50 pl-3"
+                >
+                  {([
+                    { id: 'basic' as const, icon: Palette, label: '基础设置' },
+                    { id: 'other' as const, icon: Clock, label: '其它设置' },
+                    { id: 'about' as const, icon: Info, label: '网站说明' },
+                  ]).map((sub) => (
+                    <button
+                      key={sub.id}
+                      onClick={() => { setActiveTab('settings'); setSettingsSubTab(sub.id) }}
+                      className={`w-full flex items-center gap-2 px-3 py-2 rounded-lg text-xs font-medium transition-colors ${
+                        settingsSubTab === sub.id && activeTab === 'settings'
+                          ? 'text-primary-400 bg-primary-500/10'
+                          : 'text-surface-500 hover:text-surface-300 hover:bg-surface-800/50'
+                      }`}
+                    >
+                      <sub.icon className="w-3.5 h-3.5" />
+                      <span>{sub.label}</span>
+                    </button>
+                  ))}
+                </motion.div>
+              )}
+            </AnimatePresence>
+          </div>
         </nav>
         {/* 侧边栏底部 - 插件选择 */}
         <div className="px-3 pb-4 border-t border-surface-800 pt-3">
@@ -1430,10 +1464,17 @@ function App() {
           </div>
           <div
             className={`absolute inset-0 h-full overflow-hidden transition-opacity duration-200 ${
+              activeTab === 'subscription' ? 'opacity-100 z-10' : 'opacity-0 z-0 pointer-events-none'
+            }`}
+          >
+            <PluginManager />
+          </div>
+          <div
+            className={`absolute inset-0 h-full overflow-hidden transition-opacity duration-200 ${
               activeTab === 'settings' ? 'opacity-100 z-10' : 'opacity-0 z-0 pointer-events-none'
             }`}
           >
-            <SettingsView />
+            <SettingsView initialSubTab={settingsSubTab} />
           </div>
         </div>
       </main>

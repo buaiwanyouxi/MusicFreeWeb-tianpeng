@@ -1,5 +1,5 @@
-import { useState } from 'react'
-import { motion, AnimatePresence } from 'framer-motion'
+import { useState, useEffect } from 'react'
+import { motion } from 'framer-motion'
 import {
   Sun,
   Moon,
@@ -9,52 +9,47 @@ import {
   Clock,
   Download,
   Upload,
-  Globe,
   Info,
   ChevronRight,
   ExternalLink,
   RotateCcw,
   Palette,
   Music2,
+  Pipette,
 } from 'lucide-react'
-import { PluginManager } from './PluginManager'
 
 type ThemeMode = 'light' | 'dark' | 'system'
 type FontSize = 'small' | 'medium' | 'large'
 type TimerOption = 'off' | '15' | '30' | '60' | 'custom'
 type Language = 'zh-CN' | 'zh-TW' | 'en'
+type SubTab = 'basic' | 'other' | 'about'
 
 const APP_VERSION = 'v1.0.0'
 
-export function SettingsView() {
-  const [activeSection, setActiveSection] = useState<string | null>(null)
+const FONT_FAMILIES = [
+  { value: 'system-ui, sans-serif', label: '系统默认' },
+  { value: '"DM Sans", system-ui, sans-serif', label: 'DM Sans' },
+  { value: '"Noto Sans SC", "PingFang SC", "Microsoft YaHei", sans-serif', label: '思源黑体' },
+  { value: '"Georgia", "Noto Serif SC", serif', label: '衬线体' },
+  { value: '"JetBrains Mono", "Fira Code", monospace', label: '等宽体' },
+]
 
-  const sections = [
-    { id: 'basic', label: '基础设置', icon: Palette },
-    { id: 'subscription', label: '订阅设置', icon: Globe },
-    { id: 'other', label: '其它设置', icon: Clock },
-    { id: 'about', label: '网站说明', icon: Info },
+interface SettingsViewProps {
+  initialSubTab?: SubTab
+}
+
+export function SettingsView({ initialSubTab = 'basic' }: SettingsViewProps) {
+  const [activeSubTab, setActiveSubTab] = useState<SubTab>(initialSubTab)
+
+  useEffect(() => {
+    setActiveSubTab(initialSubTab)
+  }, [initialSubTab])
+
+  const subTabs = [
+    { id: 'basic' as const, label: '基础设置', icon: Palette },
+    { id: 'other' as const, label: '其它设置', icon: Clock },
+    { id: 'about' as const, label: '网站说明', icon: Info },
   ]
-
-  if (activeSection === 'subscription') {
-    return (
-      <div className="h-full flex flex-col">
-        <div className="flex items-center gap-3 px-4 py-3 border-b border-surface-800">
-          <button
-            onClick={() => setActiveSection(null)}
-            className="p-2 rounded-lg text-surface-400 hover:text-surface-200 hover:bg-surface-800 transition-colors"
-          >
-            <ChevronRight className="w-4 h-4 rotate-180" />
-          </button>
-          <Globe className="w-5 h-5 text-primary-400" />
-          <h2 className="text-lg font-semibold text-surface-100">订阅设置</h2>
-        </div>
-        <div className="flex-1 overflow-hidden">
-          <PluginManager />
-        </div>
-      </div>
-    )
-  }
 
   return (
     <div className="h-full flex flex-col overflow-y-auto">
@@ -64,61 +59,52 @@ export function SettingsView() {
           <h2 className="text-lg font-semibold text-surface-100">设置</h2>
         </div>
 
-        <div className="pb-6 space-y-1.5">
-          {sections.map((section) => (
-            <motion.button
-              key={section.id}
-              whileTap={{ scale: 0.98 }}
-              onClick={() => setActiveSection(section.id)}
-              className="w-full flex items-center gap-3 p-4 glass rounded-xl hover:bg-surface-700/30 transition-colors text-left"
+        {/* 子标签切换 */}
+        <div className="flex gap-1 mb-4 p-1 glass rounded-xl">
+          {subTabs.map((tab) => (
+            <button
+              key={tab.id}
+              onClick={() => setActiveSubTab(tab.id)}
+              className={`flex-1 flex items-center justify-center gap-1.5 px-3 py-2 rounded-lg text-xs font-medium transition-all ${
+                activeSubTab === tab.id
+                  ? 'bg-primary-500/15 text-primary-400'
+                  : 'text-surface-400 hover:text-surface-200'
+              }`}
             >
-              <div className="w-10 h-10 rounded-lg bg-gradient-to-br from-primary-500/20 to-primary-600/20 flex items-center justify-center flex-shrink-0">
-                <section.icon className="w-5 h-5 text-primary-400" />
-              </div>
-              <span className="flex-1 text-sm font-medium text-surface-200">{section.label}</span>
-              <ChevronRight className="w-4 h-4 text-surface-500" />
-            </motion.button>
+              <tab.icon className="w-3.5 h-3.5" />
+              <span>{tab.label}</span>
+            </button>
           ))}
         </div>
       </div>
 
-      <AnimatePresence mode="wait">
-        {activeSection === 'basic' && <BasicSettings onClose={() => setActiveSection(null)} />}
-        {activeSection === 'other' && <OtherSettings onClose={() => setActiveSection(null)} />}
-        {activeSection === 'about' && <AboutSection onClose={() => setActiveSection(null)} />}
-      </AnimatePresence>
+      <div className="flex-1">
+        {activeSubTab === 'basic' && <BasicSettings />}
+        {activeSubTab === 'other' && <OtherSettings />}
+        {activeSubTab === 'about' && <AboutSection />}
+      </div>
     </div>
   )
 }
 
-// 设置页头部（统一风格）
-function SectionHeader({ icon: Icon, title, onClose }: { icon: any; title: string; onClose: () => void }) {
-  return (
-    <div className="flex items-center gap-3 py-4">
-      <button
-        onClick={onClose}
-        className="p-2 rounded-lg text-surface-400 hover:text-surface-200 hover:bg-surface-800 transition-colors"
-      >
-        <ChevronRight className="w-4 h-4 rotate-180" />
-      </button>
-      <Icon className="w-5 h-5 text-primary-400" />
-      <h2 className="text-lg font-semibold text-surface-100">{title}</h2>
-    </div>
-  )
-}
-
-// 设置项标签（统一风格）
+// 设置项标签
 function SettingLabel({ children }: { children: React.ReactNode }) {
   return <p className="text-xs text-surface-400 mb-2">{children}</p>
 }
 
 // 基础设置
-function BasicSettings({ onClose }: { onClose: () => void }) {
+function BasicSettings() {
   const [theme, setTheme] = useState<ThemeMode>(() => {
     return (localStorage.getItem('musicfree.theme') as ThemeMode) || 'dark'
   })
   const [fontSize, setFontSize] = useState<FontSize>(() => {
     return (localStorage.getItem('musicfree.fontSize') as FontSize) || 'medium'
+  })
+  const [fontFamily, setFontFamily] = useState<string>(() => {
+    return localStorage.getItem('musicfree.fontFamily') || FONT_FAMILIES[0].value
+  })
+  const [accentColor, setAccentColor] = useState<string>(() => {
+    return localStorage.getItem('musicfree.accentColor') || '#ed741e'
   })
   const [wallpaperUrl, setWallpaperUrl] = useState<string>(() => {
     return localStorage.getItem('musicfree.wallpaper') || ''
@@ -141,6 +127,18 @@ function BasicSettings({ onClose }: { onClose: () => void }) {
     localStorage.setItem('musicfree.fontSize', size)
     const sizeMap = { small: '14px', medium: '16px', large: '18px' }
     document.documentElement.style.fontSize = sizeMap[size]
+  }
+
+  const applyFontFamily = (family: string) => {
+    setFontFamily(family)
+    localStorage.setItem('musicfree.fontFamily', family)
+    document.body.style.fontFamily = family
+  }
+
+  const applyAccentColor = (color: string) => {
+    setAccentColor(color)
+    localStorage.setItem('musicfree.accentColor', color)
+    document.documentElement.style.setProperty('--color-primary', color)
   }
 
   const handleWallpaperUpload = (e: React.ChangeEvent<HTMLInputElement>) => {
@@ -166,92 +164,134 @@ function BasicSettings({ onClose }: { onClose: () => void }) {
   }
 
   return (
-    <motion.div
-      initial={{ opacity: 0 }}
-      animate={{ opacity: 1 }}
-      exit={{ opacity: 0 }}
-      className="px-4 pb-6"
-    >
-      <div className="max-w-2xl mx-auto w-full">
-        <SectionHeader icon={Palette} title="基础设置" onClose={onClose} />
+    <motion.div initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }} className="px-4 pb-6">
+      <div className="max-w-2xl mx-auto w-full space-y-4">
+        {/* 主题 */}
+        <div className="glass rounded-xl p-4">
+          <SettingLabel>主题</SettingLabel>
+          <div className="grid grid-cols-3 gap-2">
+            {([
+              { value: 'light', icon: Sun, label: '浅色' },
+              { value: 'dark', icon: Moon, label: '深色' },
+              { value: 'system', icon: Monitor, label: '跟随系统' },
+            ] as const).map((opt) => (
+              <button
+                key={opt.value}
+                onClick={() => applyTheme(opt.value)}
+                className={`flex flex-col items-center gap-2 p-3 rounded-lg transition-all ${
+                  theme === opt.value
+                    ? 'bg-primary-500/15 text-primary-400 ring-1 ring-primary-500/30'
+                    : 'bg-surface-800 text-surface-400 hover:bg-surface-700'
+                }`}
+              >
+                <opt.icon className="w-5 h-5" />
+                <span className="text-xs">{opt.label}</span>
+              </button>
+            ))}
+          </div>
+        </div>
 
-        <div className="space-y-4">
-          {/* 主题 */}
-          <div className="glass rounded-xl p-4">
-            <SettingLabel>主题</SettingLabel>
-            <div className="grid grid-cols-3 gap-2">
-              {([
-                { value: 'light', icon: Sun, label: '浅色' },
-                { value: 'dark', icon: Moon, label: '深色' },
-                { value: 'system', icon: Monitor, label: '跟随系统' },
-              ] as const).map((opt) => (
+        {/* 强调色 */}
+        <div className="glass rounded-xl p-4">
+          <SettingLabel>强调色</SettingLabel>
+          <div className="flex items-center gap-3">
+            <div className="flex gap-2">
+              {['#ed741e', '#3b82f6', '#10b981', '#8b5cf6', '#ef4444', '#f59e0b', '#ec4899', '#06b6d4'].map((color) => (
                 <button
-                  key={opt.value}
-                  onClick={() => applyTheme(opt.value)}
-                  className={`flex flex-col items-center gap-2 p-3 rounded-lg transition-all ${
-                    theme === opt.value
-                      ? 'bg-primary-500/15 text-primary-400 ring-1 ring-primary-500/30'
-                      : 'bg-surface-800 text-surface-400 hover:bg-surface-700'
+                  key={color}
+                  onClick={() => applyAccentColor(color)}
+                  className={`w-8 h-8 rounded-full transition-all ${
+                    accentColor === color ? 'ring-2 ring-offset-2 ring-offset-surface-900 scale-110' : 'hover:scale-105'
                   }`}
-                >
-                  <opt.icon className="w-5 h-5" />
-                  <span className="text-xs">{opt.label}</span>
-                </button>
+                  style={{ backgroundColor: color, outlineColor: accentColor === color ? color : undefined }}
+                />
               ))}
             </div>
+            <label className="flex items-center gap-1.5 px-2 py-1.5 rounded-lg bg-surface-800 text-surface-400 text-xs cursor-pointer hover:bg-surface-700">
+              <Pipette className="w-3.5 h-3.5" />
+              <span>自定义</span>
+              <input
+                type="color"
+                value={accentColor}
+                onChange={(e) => applyAccentColor(e.target.value)}
+                className="absolute opacity-0 w-0 h-0"
+              />
+            </label>
           </div>
+        </div>
 
-          {/* 壁纸 */}
-          <div className="glass rounded-xl p-4">
-            <SettingLabel>壁纸</SettingLabel>
-            <div className="flex gap-2">
-              <label className="flex-1 flex items-center justify-center gap-2 p-2.5 rounded-lg bg-surface-800 text-surface-300 text-sm hover:bg-surface-700 transition-colors cursor-pointer">
-                <Image className="w-4 h-4" />
-                <span>选择图片</span>
-                <input type="file" accept="image/*" className="hidden" onChange={handleWallpaperUpload} />
-              </label>
-              {wallpaperUrl && (
-                <button
-                  onClick={resetWallpaper}
-                  className="flex items-center justify-center gap-2 px-4 p-2.5 rounded-lg bg-surface-800 text-surface-300 text-sm hover:bg-red-500/15 hover:text-red-400 transition-colors"
-                >
-                  <RotateCcw className="w-4 h-4" />
-                  <span>重置</span>
-                </button>
-              )}
-            </div>
+        {/* 字体 */}
+        <div className="glass rounded-xl p-4">
+          <SettingLabel>字体</SettingLabel>
+          <div className="grid grid-cols-2 gap-2 sm:grid-cols-3">
+            {FONT_FAMILIES.map((f) => (
+              <button
+                key={f.value}
+                onClick={() => applyFontFamily(f.value)}
+                className={`p-2.5 rounded-lg text-xs transition-all text-left ${
+                  fontFamily === f.value
+                    ? 'bg-primary-500/15 text-primary-400 ring-1 ring-primary-500/30'
+                    : 'bg-surface-800 text-surface-400 hover:bg-surface-700'
+                }`}
+                style={{ fontFamily: f.value }}
+              >
+                {f.label}
+                <span className="block text-[10px] text-surface-500 mt-0.5">AaBbCc</span>
+              </button>
+            ))}
+          </div>
+        </div>
+
+        {/* 字体大小 */}
+        <div className="glass rounded-xl p-4">
+          <SettingLabel>字体大小</SettingLabel>
+          <div className="grid grid-cols-3 gap-2">
+            {([
+              { value: 'small', label: '小', size: '14px' },
+              { value: 'medium', label: '中', size: '16px' },
+              { value: 'large', label: '大', size: '18px' },
+            ] as const).map((opt) => (
+              <button
+                key={opt.value}
+                onClick={() => applyFontSize(opt.value)}
+                className={`flex flex-col items-center gap-1 p-3 rounded-lg transition-all ${
+                  fontSize === opt.value
+                    ? 'bg-primary-500/15 text-primary-400 ring-1 ring-primary-500/30'
+                    : 'bg-surface-800 text-surface-400 hover:bg-surface-700'
+                }`}
+              >
+                <Type className="w-5 h-5" />
+                <span className="text-xs">{opt.label}</span>
+                <span className="text-[10px] text-surface-500">{opt.size}</span>
+              </button>
+            ))}
+          </div>
+        </div>
+
+        {/* 壁纸 */}
+        <div className="glass rounded-xl p-4">
+          <SettingLabel>壁纸</SettingLabel>
+          <div className="flex gap-2">
+            <label className="flex-1 flex items-center justify-center gap-2 p-2.5 rounded-lg bg-surface-800 text-surface-300 text-sm hover:bg-surface-700 transition-colors cursor-pointer">
+              <Image className="w-4 h-4" />
+              <span>选择图片</span>
+              <input type="file" accept="image/*" className="hidden" onChange={handleWallpaperUpload} />
+            </label>
             {wallpaperUrl && (
-              <div className="relative h-24 mt-3 rounded-lg overflow-hidden">
-                <img src={wallpaperUrl} alt="wallpaper" className="w-full h-full object-cover" />
-              </div>
+              <button
+                onClick={resetWallpaper}
+                className="flex items-center justify-center gap-2 px-4 p-2.5 rounded-lg bg-surface-800 text-surface-300 text-sm hover:bg-red-500/15 hover:text-red-400 transition-colors"
+              >
+                <RotateCcw className="w-4 h-4" />
+                <span>重置</span>
+              </button>
             )}
           </div>
-
-          {/* 字体大小 */}
-          <div className="glass rounded-xl p-4">
-            <SettingLabel>字体大小</SettingLabel>
-            <div className="grid grid-cols-3 gap-2">
-              {([
-                { value: 'small', label: '小', size: '14px' },
-                { value: 'medium', label: '中', size: '16px' },
-                { value: 'large', label: '大', size: '18px' },
-              ] as const).map((opt) => (
-                <button
-                  key={opt.value}
-                  onClick={() => applyFontSize(opt.value)}
-                  className={`flex flex-col items-center gap-1 p-3 rounded-lg transition-all ${
-                    fontSize === opt.value
-                      ? 'bg-primary-500/15 text-primary-400 ring-1 ring-primary-500/30'
-                      : 'bg-surface-800 text-surface-400 hover:bg-surface-700'
-                  }`}
-                >
-                  <Type className="w-5 h-5" />
-                  <span className="text-xs">{opt.label}</span>
-                  <span className="text-[10px] text-surface-500">{opt.size}</span>
-                </button>
-              ))}
+          {wallpaperUrl && (
+            <div className="relative h-24 mt-3 rounded-lg overflow-hidden">
+              <img src={wallpaperUrl} alt="wallpaper" className="w-full h-full object-cover" />
             </div>
-          </div>
+          )}
         </div>
       </div>
     </motion.div>
@@ -259,7 +299,7 @@ function BasicSettings({ onClose }: { onClose: () => void }) {
 }
 
 // 其它设置
-function OtherSettings({ onClose }: { onClose: () => void }) {
+function OtherSettings() {
   const [timer, setTimer] = useState<TimerOption>(() => {
     return (localStorage.getItem('musicfree.timer') as TimerOption) || 'off'
   })
@@ -286,6 +326,8 @@ function OtherSettings({ onClose }: { onClose: () => void }) {
       exportedAt: new Date().toISOString(),
       theme: localStorage.getItem('musicfree.theme'),
       fontSize: localStorage.getItem('musicfree.fontSize'),
+      fontFamily: localStorage.getItem('musicfree.fontFamily'),
+      accentColor: localStorage.getItem('musicfree.accentColor'),
       language: localStorage.getItem('musicfree.language'),
       subscriptions: localStorage.getItem('musicfree.subscriptions'),
       plugins: localStorage.getItem('musicfree.plugins.cache'),
@@ -316,6 +358,8 @@ function OtherSettings({ onClose }: { onClose: () => void }) {
         const mappings: Record<string, string> = {
           theme: 'musicfree.theme',
           fontSize: 'musicfree.fontSize',
+          fontFamily: 'musicfree.fontFamily',
+          accentColor: 'musicfree.accentColor',
           language: 'musicfree.language',
           subscriptions: 'musicfree.subscriptions',
           plugins: 'musicfree.plugins.cache',
@@ -339,98 +383,89 @@ function OtherSettings({ onClose }: { onClose: () => void }) {
   }
 
   return (
-    <motion.div
-      initial={{ opacity: 0 }}
-      animate={{ opacity: 1 }}
-      exit={{ opacity: 0 }}
-      className="px-4 pb-6"
-    >
-      <div className="max-w-2xl mx-auto w-full">
-        <SectionHeader icon={Clock} title="其它设置" onClose={onClose} />
-
-        <div className="space-y-4">
-          {/* 定时关闭 */}
-          <div className="glass rounded-xl p-4">
-            <SettingLabel>定时关闭</SettingLabel>
-            <div className="grid grid-cols-4 gap-2">
-              {([
-                { value: 'off', label: '关闭' },
-                { value: '15', label: '15分钟' },
-                { value: '30', label: '30分钟' },
-                { value: '60', label: '60分钟' },
-              ] as const).map((opt) => (
-                <button
-                  key={opt.value}
-                  onClick={() => applyTimer(opt.value)}
-                  className={`p-2.5 rounded-lg text-xs transition-all ${
-                    timer === opt.value
-                      ? 'bg-primary-500/15 text-primary-400 ring-1 ring-primary-500/30'
-                      : 'bg-surface-800 text-surface-400 hover:bg-surface-700'
-                  }`}
-                >
-                  {opt.label}
-                </button>
-              ))}
-            </div>
-            {timer === 'custom' && (
-              <div className="flex items-center gap-2 mt-3">
-                <input
-                  type="number"
-                  value={customMinutes}
-                  onChange={(e) => {
-                    setCustomMinutes(e.target.value)
-                    localStorage.setItem('musicfree.timer.custom', e.target.value)
-                  }}
-                  className="w-20 bg-surface-800 rounded-lg py-2 px-3 text-sm text-surface-100"
-                  min="1"
-                  max="480"
-                />
-                <span className="text-xs text-surface-500">分钟</span>
-              </div>
-            )}
-          </div>
-
-          {/* 语言 */}
-          <div className="glass rounded-xl p-4">
-            <SettingLabel>语言</SettingLabel>
-            <div className="grid grid-cols-3 gap-2">
-              {([
-                { value: 'zh-CN', label: '简体中文' },
-                { value: 'zh-TW', label: '繁體中文' },
-                { value: 'en', label: 'English' },
-              ] as const).map((opt) => (
-                <button
-                  key={opt.value}
-                  onClick={() => applyLanguage(opt.value)}
-                  className={`p-2.5 rounded-lg text-xs transition-all ${
-                    language === opt.value
-                      ? 'bg-primary-500/15 text-primary-400 ring-1 ring-primary-500/30'
-                      : 'bg-surface-800 text-surface-400 hover:bg-surface-700'
-                  }`}
-                >
-                  {opt.label}
-                </button>
-              ))}
-            </div>
-          </div>
-
-          {/* 备份与恢复 */}
-          <div className="glass rounded-xl p-4">
-            <SettingLabel>备份与恢复</SettingLabel>
-            <div className="flex gap-2">
+    <motion.div initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }} className="px-4 pb-6">
+      <div className="max-w-2xl mx-auto w-full space-y-4">
+        {/* 定时关闭 */}
+        <div className="glass rounded-xl p-4">
+          <SettingLabel>定时关闭</SettingLabel>
+          <div className="grid grid-cols-4 gap-2">
+            {([
+              { value: 'off', label: '关闭' },
+              { value: '15', label: '15分钟' },
+              { value: '30', label: '30分钟' },
+              { value: '60', label: '60分钟' },
+            ] as const).map((opt) => (
               <button
-                onClick={handleExport}
-                className="flex-1 flex items-center justify-center gap-2 p-2.5 rounded-lg bg-surface-800 text-surface-300 text-sm hover:bg-surface-700 transition-colors"
+                key={opt.value}
+                onClick={() => applyTimer(opt.value)}
+                className={`p-2.5 rounded-lg text-xs transition-all ${
+                  timer === opt.value
+                    ? 'bg-primary-500/15 text-primary-400 ring-1 ring-primary-500/30'
+                    : 'bg-surface-800 text-surface-400 hover:bg-surface-700'
+                }`}
               >
-                <Download className="w-4 h-4" />
-                <span>导出配置</span>
+                {opt.label}
               </button>
-              <label className="flex-1 flex items-center justify-center gap-2 p-2.5 rounded-lg bg-surface-800 text-surface-300 text-sm hover:bg-surface-700 transition-colors cursor-pointer">
-                <Upload className="w-4 h-4" />
-                <span>导入配置</span>
-                <input type="file" accept=".json" className="hidden" onChange={handleImport} />
-              </label>
+            ))}
+          </div>
+          {timer === 'custom' && (
+            <div className="flex items-center gap-2 mt-3">
+              <input
+                type="number"
+                value={customMinutes}
+                onChange={(e) => {
+                  setCustomMinutes(e.target.value)
+                  localStorage.setItem('musicfree.timer.custom', e.target.value)
+                }}
+                className="w-20 bg-surface-800 rounded-lg py-2 px-3 text-sm text-surface-100"
+                min="1"
+                max="480"
+              />
+              <span className="text-xs text-surface-500">分钟</span>
             </div>
+          )}
+        </div>
+
+        {/* 语言 */}
+        <div className="glass rounded-xl p-4">
+          <SettingLabel>语言</SettingLabel>
+          <div className="grid grid-cols-3 gap-2">
+            {([
+              { value: 'zh-CN', label: '简体中文' },
+              { value: 'zh-TW', label: '繁體中文' },
+              { value: 'en', label: 'English' },
+            ] as const).map((opt) => (
+              <button
+                key={opt.value}
+                onClick={() => applyLanguage(opt.value)}
+                className={`p-2.5 rounded-lg text-xs transition-all ${
+                  language === opt.value
+                    ? 'bg-primary-500/15 text-primary-400 ring-1 ring-primary-500/30'
+                    : 'bg-surface-800 text-surface-400 hover:bg-surface-700'
+                }`}
+              >
+                {opt.label}
+              </button>
+            ))}
+          </div>
+        </div>
+
+        {/* 备份与恢复 */}
+        <div className="glass rounded-xl p-4">
+          <SettingLabel>备份与恢复</SettingLabel>
+          <div className="flex gap-2">
+            <button
+              onClick={handleExport}
+              className="flex-1 flex items-center justify-center gap-2 p-2.5 rounded-lg bg-surface-800 text-surface-300 text-sm hover:bg-surface-700 transition-colors"
+            >
+              <Download className="w-4 h-4" />
+              <span>导出配置</span>
+            </button>
+            <label className="flex-1 flex items-center justify-center gap-2 p-2.5 rounded-lg bg-surface-800 text-surface-300 text-sm hover:bg-surface-700 transition-colors cursor-pointer">
+              <Upload className="w-4 h-4" />
+              <span>导入配置</span>
+              <input type="file" accept=".json" className="hidden" onChange={handleImport} />
+            </label>
           </div>
         </div>
       </div>
@@ -439,73 +474,64 @@ function OtherSettings({ onClose }: { onClose: () => void }) {
 }
 
 // 网站说明
-function AboutSection({ onClose }: { onClose: () => void }) {
+function AboutSection() {
   return (
-    <motion.div
-      initial={{ opacity: 0 }}
-      animate={{ opacity: 1 }}
-      exit={{ opacity: 0 }}
-      className="px-4 pb-6"
-    >
-      <div className="max-w-2xl mx-auto w-full">
-        <SectionHeader icon={Info} title="网站说明" onClose={onClose} />
-
-        <div className="space-y-4">
-          {/* Logo & 标题 */}
-          <div className="glass rounded-xl p-6 flex flex-col items-center">
-            <div className="w-14 h-14 rounded-xl bg-gradient-to-br from-primary-500/20 to-primary-600/20 flex items-center justify-center mb-3">
-              <Music2 className="w-7 h-7 text-primary-400" />
-            </div>
-            <h3 className="text-base font-bold text-surface-100">MusicFreeWeb</h3>
-            <p className="text-xs text-surface-500 mt-1">插件化音乐播放器</p>
-            <span className="mt-2 px-2.5 py-0.5 rounded-full bg-surface-800 text-surface-500 text-[10px]">
-              {APP_VERSION}
-            </span>
+    <motion.div initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }} className="px-4 pb-6">
+      <div className="max-w-2xl mx-auto w-full space-y-4">
+        {/* Logo & 标题 */}
+        <div className="glass rounded-xl p-6 flex flex-col items-center">
+          <div className="w-14 h-14 rounded-xl bg-gradient-to-br from-primary-500/20 to-primary-600/20 flex items-center justify-center mb-3">
+            <Music2 className="w-7 h-7 text-primary-400" />
           </div>
+          <h3 className="text-base font-bold text-surface-100">MusicFreeWeb</h3>
+          <p className="text-xs text-surface-500 mt-1">插件化音乐播放器</p>
+          <span className="mt-2 px-2.5 py-0.5 rounded-full bg-surface-800 text-surface-500 text-[10px]">
+            {APP_VERSION}
+          </span>
+        </div>
 
-          {/* 关于 */}
-          <div className="glass rounded-xl p-4 space-y-3">
-            <p className="text-sm text-surface-300 leading-relaxed">
-              MusicFreeWeb 是基于 MusicFree 开源项目的 Web 版本实现。
-            </p>
-            <p className="text-sm text-surface-300 leading-relaxed">
-              MusicFree 是一款插件化、定制化、无广告的免费音乐播放器，由猫头猫（maotoumao）开发并开源。
-            </p>
-            <p className="text-sm text-surface-300 leading-relaxed">
-              本项目的插件协议与 MusicFree 保持一致，所有插件均可在 MusicFree 桌面端和移动端通用。
-            </p>
-          </div>
+        {/* 关于 */}
+        <div className="glass rounded-xl p-4 space-y-3">
+          <p className="text-sm text-surface-300 leading-relaxed">
+            MusicFreeWeb 是基于 MusicFree 开源项目的 Web 版本实现。
+          </p>
+          <p className="text-sm text-surface-300 leading-relaxed">
+            MusicFree 是一款插件化、定制化、无广告的免费音乐播放器，由猫头猫（maotoumao）开发并开源。
+          </p>
+          <p className="text-sm text-surface-300 leading-relaxed">
+            本项目的插件协议与 MusicFree 保持一致，所有插件均可在 MusicFree 桌面端和移动端通用。
+          </p>
+        </div>
 
-          {/* 链接 */}
-          <div className="glass rounded-xl overflow-hidden">
-            <a
-              href="https://github.com/maotoumao/MusicFreeDesktop"
-              target="_blank"
-              rel="noopener noreferrer"
-              className="flex items-center gap-3 p-4 hover:bg-surface-700/30 transition-colors border-b border-surface-800"
-            >
-              <ExternalLink className="w-4 h-4 text-primary-400 flex-shrink-0" />
-              <span className="text-sm text-surface-300 flex-1">MusicFree 官方项目</span>
-              <ChevronRight className="w-4 h-4 text-surface-600" />
-            </a>
-            <a
-              href="https://github.com/your-repo/MusicFreeWeb"
-              target="_blank"
-              rel="noopener noreferrer"
-              className="flex items-center gap-3 p-4 hover:bg-surface-700/30 transition-colors"
-            >
-              <ExternalLink className="w-4 h-4 text-primary-400 flex-shrink-0" />
-              <span className="text-sm text-surface-300 flex-1">本项目源代码</span>
-              <ChevronRight className="w-4 h-4 text-surface-600" />
-            </a>
-          </div>
+        {/* 链接 */}
+        <div className="glass rounded-xl overflow-hidden">
+          <a
+            href="https://github.com/maotoumao/MusicFreeDesktop"
+            target="_blank"
+            rel="noopener noreferrer"
+            className="flex items-center gap-3 p-4 hover:bg-surface-700/30 transition-colors border-b border-surface-800"
+          >
+            <ExternalLink className="w-4 h-4 text-primary-400 flex-shrink-0" />
+            <span className="text-sm text-surface-300 flex-1">MusicFree 官方项目</span>
+            <ChevronRight className="w-4 h-4 text-surface-600" />
+          </a>
+          <a
+            href="https://github.com/your-repo/MusicFreeWeb"
+            target="_blank"
+            rel="noopener noreferrer"
+            className="flex items-center gap-3 p-4 hover:bg-surface-700/30 transition-colors"
+          >
+            <ExternalLink className="w-4 h-4 text-primary-400 flex-shrink-0" />
+            <span className="text-sm text-surface-300 flex-1">本项目源代码</span>
+            <ChevronRight className="w-4 h-4 text-surface-600" />
+          </a>
+        </div>
 
-          {/* 协议 */}
-          <div className="glass rounded-xl p-4">
-            <p className="text-xs text-surface-500 text-center">
-              MusicFree 遵循 AGPL-3.0 协议开源
-            </p>
-          </div>
+        {/* 协议 */}
+        <div className="glass rounded-xl p-4">
+          <p className="text-xs text-surface-500 text-center">
+            MusicFree 遵循 AGPL-3.0 协议开源
+          </p>
         </div>
       </div>
     </motion.div>

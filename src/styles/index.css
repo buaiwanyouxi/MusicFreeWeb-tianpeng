@@ -15,32 +15,72 @@
   --font-base: 14px;
 }
 
-/* 浅色主题 */
+/* 浅色主题 - 白底黑字 */
 html.light-theme {
-  --color-surface: #f8fafc;
-  --color-surface-elevated: #e2e8f0;
+  --color-surface: #ffffff;
+  --color-surface-elevated: #f1f5f9;
 }
 
 html.light-theme body {
-  background: linear-gradient(135deg, #f8fafc 0%, #e2e8f0 50%, #f8fafc 100%);
+  background: #ffffff;
   color: #1e293b;
 }
 
 html.light-theme .glass {
-  background: rgba(255, 255, 255, 0.8);
-  border: 1px solid rgba(0, 0, 0, 0.08);
+  background: rgba(255, 255, 255, 0.95);
+  border: 1px solid rgba(0, 0, 0, 0.06);
+  box-shadow: 0 1px 3px rgba(0, 0, 0, 0.04);
 }
 
 html.light-theme .glass-light {
-  background: rgba(0, 0, 0, 0.03);
+  background: rgba(0, 0, 0, 0.02);
 }
 
 html.light-theme ::-webkit-scrollbar-thumb {
-  background: rgba(0, 0, 0, 0.15);
+  background: rgba(0, 0, 0, 0.12);
 }
 
 html.light-theme ::-webkit-scrollbar-thumb:hover {
-  background: rgba(0, 0, 0, 0.25);
+  background: rgba(0, 0, 0, 0.2);
+}
+
+/* 浅色主题下的 Tailwind surface 颜色覆盖 */
+html.light-theme .bg-surface-950,
+html.light-theme .bg-surface-900 { background-color: #ffffff !important; }
+html.light-theme .bg-surface-800 { background-color: #f1f5f9 !important; }
+html.light-theme .bg-surface-800\/50 { background-color: rgba(241, 245, 249, 0.8) !important; }
+html.light-theme .bg-surface-800\/30 { background-color: rgba(241, 245, 249, 0.5) !important; }
+html.light-theme .bg-surface-700 { background-color: #e2e8f0 !important; }
+html.light-theme .bg-surface-700\/50 { background-color: rgba(226, 232, 240, 0.6) !important; }
+html.light-theme .bg-surface-700\/30 { background-color: rgba(226, 232, 240, 0.3) !important; }
+
+html.light-theme .text-surface-100 { color: #0f172a !important; }
+html.light-theme .text-surface-200 { color: #1e293b !important; }
+html.light-theme .text-surface-300 { color: #334155 !important; }
+html.light-theme .text-surface-400 { color: #64748b !important; }
+html.light-theme .text-surface-500 { color: #94a3b8 !important; }
+html.light-theme .text-surface-600 { color: #cbd5e1 !important; }
+
+html.light-theme .border-surface-800 { border-color: #e2e8f0 !important; }
+html.light-theme .border-surface-700 { border-color: #e2e8f0 !important; }
+html.light-theme .border-surface-700\/50 { border-color: rgba(226, 232, 240, 0.6) !important; }
+html.light-theme .border-surface-700\/30 { border-color: rgba(226, 232, 240, 0.3) !important; }
+
+html.light-theme .from-surface-950 { --tw-gradient-from: #ffffff !important; }
+html.light-theme .via-surface-950 { --tw-gradient-via: #ffffff !important; }
+html.light-theme .via-surface-950\/95 { --tw-gradient-via: rgba(255,255,255,0.95) !important; }
+
+html.light-theme aside {
+  background: rgba(255, 255, 255, 0.95) !important;
+  border-color: #e2e8f0 !important;
+}
+
+html.light-theme input,
+html.light-theme select,
+html.light-theme textarea {
+  background-color: #f1f5f9 !important;
+  color: #1e293b !important;
+  border-color: #e2e8f0 !important;
 }
 
 /* 平板端 (768px - 1024px) */
