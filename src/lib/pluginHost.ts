@@ -10,6 +10,7 @@ import type {
 } from '../types/plugin'
 import CryptoJS from 'crypto-js'
 import bigInt from 'big-integer'
+import { runInPluginContext, setSandboxLogSink } from './pluginSandbox'
 
 const STORAGE_KEY = 'musicfree.h5.plugins'
 export const DEFAULT_PLUGIN_FEED = ''
@@ -43,6 +44,9 @@ const debugLog = (type: DebugLogType, message: string, data?: unknown) => {
   const entry: DebugLogEntry = { time: Date.now(), type, message, data }
   debugLogCallbacks.forEach(cb => cb(entry))
 }
+
+// 沙箱守卫（pluginSandbox）审计日志 → 桥接调试日志系统
+setSandboxLogSink((type, message) => debugLog(type, message))
 
 const now = () => Date.now()
 
@@ -318,12 +322,7 @@ export const fetchPluginFeed = async (feedUrl: string): Promise<PluginFeed> => {
       cache: 'no-store',
     })
   } catch (error) {
-    console.warn('[Feed] 远程获取失败，尝试本地备份:', error)
-    try {
-      return await fetchLocalFeed()
-    } catch {
-      throw new Error(`无法获取订阅源：${feedUrl}，请检查网络连接或 URL 是否正确`)
-    }
+    throw new Error('项目自身不含音源，请确认订阅源 URL 有效')
   }
 
   // 尝试解析为 JSON
@@ -351,18 +350,6 @@ export const fetchPluginFeed = async (feedUrl: string): Promise<PluginFeed> => {
   } catch {
     throw new Error('无法识别该订阅源格式，请确认 URL 指向有效的插件订阅 JSON 或插件脚本')
   }
-}
-
-const fetchLocalFeed = async (): Promise<PluginFeed> => {
-  const res = await fetch('/feeds.default.json', { cache: 'no-store' })
-  if (!res.ok) {
-    throw new Error('无法加载本地备份插件列表')
-  }
-  const data = (await res.json()) as PluginFeed
-  if (!data?.plugins?.length) {
-    throw new Error('本地备份为空，请检查 feeds.default.json')
-  }
-  return { ...data, source: 'fallback' }
 }
 
 export const buildDescriptor = (
@@ -477,7 +464,13 @@ const urlRewriteRules: Array<{ pattern: RegExp; replace: string }> = [
   { pattern: /^https?:\/\/www\.buguomusic\.com\//, replace: '/api/proxy/buguomusic/' },
 
   // ============ 歌词网 (followlyrics) ============
-  { pattern: /^https?:\/\/www\.followlyrics\.com\//, replace: '/api/proxy/followlyrics/' },
+  { pattern: /^https?:\/\/(www|zh)\.followlyrics\.com\//, replace: '/api/proxy/followlyrics/' },
+
+  // ============ 布谷音乐 (镜像API/酷我/QQ榜/酷狗榜) ============
+  { pattern: /^https?:\/\/(www\.)?buguyy\.top\//, replace: '/api/proxy/buguyy/' },
+  { pattern: /^https?:\/\/www\.kuwo\.cn\//, replace: '/api/proxy/kuwo_www/' },
+  { pattern: /^https?:\/\/y\.qq\.com\//, replace: '/api/proxy/qq_html/' },
+  { pattern: /^https?:\/\/www\.kugou\.com\//, replace: '/api/proxy/kugou_www/' },
 
   // ============ 插件加载 ============
   { pattern: /^https?:\/\/gitee\.com\//, replace: '/api/proxy/gitee/' },
@@ -1497,14 +1490,16 @@ const executePluginCode = async (
   const previous = getGlobalHost()
   setGlobalHost(hostApi)
   try {
-    wrapped(
-      module, 
-      module.exports, 
-      requireShim,
-      hostApi,
-      proxiedFetch,
-      createPluginConsole(descriptor.name),
-      env
+    await runInPluginContext(() =>
+      wrapped(
+        module,
+        module.exports,
+        requireShim,
+        hostApi,
+        proxiedFetch,
+        createPluginConsole(descriptor.name),
+        env
+      )
     )
   } finally {
     setGlobalHost(previous)
@@ -1557,7 +1552,7 @@ const executePluginCode = async (
         async resolveStream(track) {
           if (typeof exp.getMediaSource === 'function') {
             try {
-              const result = await (exp.getMediaSource as (t: unknown, q: string) => Promise<any>)(track.extra || track, 'standard')
+              const result = await runInPluginContext(() => (exp.getMediaSource as (t: unknown, q: string) => Promise<any>)(track.extra || track, 'standard'))
               if (result?.url) {
                 const streamResult: any = { url: result.url }
                 if (result.headers) {
@@ -1687,17 +1682,30 @@ const mapTrack = (track: MusicFreeTrack): PluginTrack => ({
   artists: track.artist ? track.artist.split(/[,，、]/).map(s => s.trim()) : ['未知'],
   album: track.album,
   coverUrl: track.artwork,
-  duration: undefined,
+  duration: typeof track.duration === 'number' && (track.duration as number) > 0 ? (track.duration as number) : undefined,
   streamUrl: track.url,
   extra: track,
 })
 
 // 将 MusicFree 原生插件适配为 H5 插件格式
 const adaptMusicFreePlugin = (
-  native: MusicFreeNativePlugin,
+  rawNative: MusicFreeNativePlugin,
   _proxiedFetch: typeof fetch
 ): MusicPlugin => {
-  console.log('[adaptMusicFreePlugin] 适配插件:', native.platform, '支持类型:', native.supportedSearchType)
+  console.log('[adaptMusicFreePlugin] 适配插件:', rawNative.platform, '支持类型:', rawNative.supportedSearchType)
+
+  // P0-4 最小沙箱：所有原生插件方法调用都包裹在"插件上下文"中
+  // （期间插件读取 localStorage 被屏蔽为内存 shim，绕过代理的直连外网请求会被审计记录）
+  const native = new Proxy(rawNative, {
+    get(target, prop, receiver) {
+      const value = Reflect.get(target, prop, receiver)
+      if (typeof value === 'function' && typeof prop === 'string' && !prop.startsWith('__')) {
+        return (...args: unknown[]) =>
+          runInPluginContext(() => (value as (...a: unknown[]) => unknown).apply(target, args))
+      }
+      return value
+    },
+  }) as MusicFreeNativePlugin
 
   const supportedTypes = native.supportedSearchType || ['music']
 
@@ -1720,6 +1728,7 @@ const adaptMusicFreePlugin = (
     name: native.platform,
     version: native.version,
     author: native.author,
+    __nativePlugin: native,
     capabilities: detectedCapabilities as any,
     supportedSearchTypes: supportedTypes.map(t => {
       if (t === 'music' || t === 'song') return 'music'
@@ -2043,13 +2052,14 @@ const adaptMusicFreePlugin = (
       }
       
       if (native.getMediaSource && track.extra) {
-        // 优先尝试标准/高清等约定名称，最后才尝试数字形式，避免出现 /undefined
-        const qualities = ['standard', 'high', 'super', 'low', 'lossless', '128', '320']
+        // P0-3: 单一音质请求（与官方宿主行为一致），不再循环 7 种音质，
+        // 避免放大插件 API 调用（每次都是真实网络请求，会触发源站限流）
+        const qualities = ['standard']
         for (const quality of qualities) {
           try {
             const result = await native.getMediaSource(track.extra as MusicFreeTrack, quality)
             
-            console.log('[Lyrics] getMediaSource 原始返回:', JSON.stringify(result).substring(0, 500))
+            console.log('[Stream] getMediaSource 返回:', (result as any)?.url ? '有 url' : '无 url')
             
             // 处理返回的数据结构：可能是多种格式
             // 1. { code: 200, data: { url, lrc, ... } }
@@ -2110,8 +2120,9 @@ const adaptMusicFreePlugin = (
               }
               return streamResult
             }
-          } catch {
-            continue
+          } catch (err) {
+            // P0-3: 透传原始错误（付费内容/未收录/限流等），不再吞错
+            throw err
           }
         }
       }

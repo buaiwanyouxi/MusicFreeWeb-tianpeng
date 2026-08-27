@@ -13,3 +13,4 @@ npm-debug.log*
 .idea
 coverage
 *.tsbuildinfo
+e2e-feed.json

@@ -489,7 +489,7 @@ function AboutSection({ onClose }: { onClose: () => void }) {
               <ChevronRight className="w-4 h-4 text-surface-600" />
             </a>
             <a
-              href="https://gitee.com/koujiao/MusicFreeWeb-tianpeng"
+              href="https://github.com/your-repo/MusicFreeWeb"
               target="_blank"
               rel="noopener noreferrer"
               className="flex items-center gap-3 p-4 hover:bg-surface-700/30 transition-colors"
