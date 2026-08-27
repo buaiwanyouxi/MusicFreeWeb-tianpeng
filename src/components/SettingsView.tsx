@@ -42,11 +42,12 @@ export function SettingsView() {
         <div className="flex items-center gap-3 px-4 py-3 border-b border-surface-800">
           <button
             onClick={() => setActiveSection(null)}
-            className="p-1.5 rounded-lg text-surface-400 hover:text-surface-200 hover:bg-surface-800 transition-colors"
+            className="p-2 rounded-lg text-surface-400 hover:text-surface-200 hover:bg-surface-800 transition-colors"
           >
-            <ChevronRight className="w-5 h-5 rotate-180" />
+            <ChevronRight className="w-4 h-4 rotate-180" />
           </button>
-          <h2 className="text-base font-semibold text-surface-100">订阅设置</h2>
+          <Globe className="w-5 h-5 text-primary-400" />
+          <h2 className="text-lg font-semibold text-surface-100">订阅设置</h2>
         </div>
         <div className="flex-1 overflow-hidden">
           <PluginManager />
@@ -57,31 +58,30 @@ export function SettingsView() {
 
   return (
     <div className="h-full flex flex-col overflow-y-auto">
-      <div className="px-4 py-4">
-        <h1 className="text-xl font-bold text-surface-100 mb-1">设置</h1>
-        <p className="text-xs text-surface-500">自定义你的音乐体验</p>
+      <div className="px-4 max-w-2xl mx-auto w-full">
+        <div className="flex items-center gap-3 py-4">
+          <Music2 className="w-5 h-5 text-primary-400" />
+          <h2 className="text-lg font-semibold text-surface-100">设置</h2>
+        </div>
+
+        <div className="pb-6 space-y-1.5">
+          {sections.map((section) => (
+            <motion.button
+              key={section.id}
+              whileTap={{ scale: 0.98 }}
+              onClick={() => setActiveSection(section.id)}
+              className="w-full flex items-center gap-3 p-4 glass rounded-xl hover:bg-surface-700/30 transition-colors text-left"
+            >
+              <div className="w-10 h-10 rounded-lg bg-gradient-to-br from-primary-500/20 to-primary-600/20 flex items-center justify-center flex-shrink-0">
+                <section.icon className="w-5 h-5 text-primary-400" />
+              </div>
+              <span className="flex-1 text-sm font-medium text-surface-200">{section.label}</span>
+              <ChevronRight className="w-4 h-4 text-surface-500" />
+            </motion.button>
+          ))}
+        </div>
       </div>
 
-      <div className="px-4 pb-6 space-y-2">
-        {sections.map((section) => (
-          <motion.button
-            key={section.id}
-            whileTap={{ scale: 0.98 }}
-            onClick={() => setActiveSection(section.id)}
-            className="w-full flex items-center gap-4 p-4 rounded-2xl bg-surface-800/50 border border-surface-700/50 hover:bg-surface-700/50 transition-colors text-left"
-          >
-            <div className="w-10 h-10 rounded-xl bg-primary-500/10 flex items-center justify-center flex-shrink-0">
-              <section.icon className="w-5 h-5 text-primary-400" />
-            </div>
-            <div className="flex-1">
-              <p className="text-sm font-medium text-surface-200">{section.label}</p>
-            </div>
-            <ChevronRight className="w-4 h-4 text-surface-500" />
-          </motion.button>
-        ))}
-      </div>
-
-      {/* 各板块内容 */}
       <AnimatePresence mode="wait">
         {activeSection === 'basic' && <BasicSettings onClose={() => setActiveSection(null)} />}
         {activeSection === 'other' && <OtherSettings onClose={() => setActiveSection(null)} />}
@@ -89,6 +89,27 @@ export function SettingsView() {
       </AnimatePresence>
     </div>
   )
+}
+
+// 设置页头部（统一风格）
+function SectionHeader({ icon: Icon, title, onClose }: { icon: any; title: string; onClose: () => void }) {
+  return (
+    <div className="flex items-center gap-3 py-4">
+      <button
+        onClick={onClose}
+        className="p-2 rounded-lg text-surface-400 hover:text-surface-200 hover:bg-surface-800 transition-colors"
+      >
+        <ChevronRight className="w-4 h-4 rotate-180" />
+      </button>
+      <Icon className="w-5 h-5 text-primary-400" />
+      <h2 className="text-lg font-semibold text-surface-100">{title}</h2>
+    </div>
+  )
+}
+
+// 设置项标签（统一风格）
+function SettingLabel({ children }: { children: React.ReactNode }) {
+  return <p className="text-xs text-surface-400 mb-2">{children}</p>
 }
 
 // 基础设置
@@ -149,92 +170,88 @@ function BasicSettings({ onClose }: { onClose: () => void }) {
       initial={{ opacity: 0 }}
       animate={{ opacity: 1 }}
       exit={{ opacity: 0 }}
-      className="px-4 pb-6 space-y-6"
+      className="px-4 pb-6"
     >
-      <div className="flex items-center gap-3 mb-2">
-        <button
-          onClick={onClose}
-          className="p-1.5 rounded-lg text-surface-400 hover:text-surface-200 hover:bg-surface-800 transition-colors"
-        >
-          <ChevronRight className="w-5 h-5 rotate-180" />
-        </button>
-        <h2 className="text-base font-semibold text-surface-100">基础设置</h2>
-      </div>
+      <div className="max-w-2xl mx-auto w-full">
+        <SectionHeader icon={Palette} title="基础设置" onClose={onClose} />
 
-      {/* 主题 */}
-      <div className="space-y-3">
-        <label className="text-xs text-surface-400 font-medium uppercase tracking-wider">主题</label>
-        <div className="grid grid-cols-3 gap-2">
-          {([
-            { value: 'light', icon: Sun, label: '浅色' },
-            { value: 'dark', icon: Moon, label: '深色' },
-            { value: 'system', icon: Monitor, label: '跟随系统' },
-          ] as const).map((opt) => (
-            <button
-              key={opt.value}
-              onClick={() => applyTheme(opt.value)}
-              className={`flex flex-col items-center gap-2 p-3 rounded-xl border transition-all ${
-                theme === opt.value
-                  ? 'bg-primary-500/10 border-primary-500/30 text-primary-400'
-                  : 'bg-surface-800/50 border-surface-700/50 text-surface-400 hover:border-surface-600'
-              }`}
-            >
-              <opt.icon className="w-5 h-5" />
-              <span className="text-xs">{opt.label}</span>
-            </button>
-          ))}
-        </div>
-      </div>
-
-      {/* 壁纸 */}
-      <div className="space-y-3">
-        <label className="text-xs text-surface-400 font-medium uppercase tracking-wider">壁纸</label>
-        <div className="flex gap-2">
-          <label className="flex-1 flex items-center justify-center gap-2 p-3 rounded-xl bg-surface-800/50 border border-surface-700/50 text-surface-400 hover:border-surface-600 transition-colors cursor-pointer">
-            <Image className="w-4 h-4" />
-            <span className="text-xs">选择图片</span>
-            <input type="file" accept="image/*" className="hidden" onChange={handleWallpaperUpload} />
-          </label>
-          {wallpaperUrl && (
-            <button
-              onClick={resetWallpaper}
-              className="flex items-center justify-center gap-2 px-4 p-3 rounded-xl bg-surface-800/50 border border-surface-700/50 text-surface-400 hover:border-red-500/30 hover:text-red-400 transition-colors"
-            >
-              <RotateCcw className="w-4 h-4" />
-              <span className="text-xs">重置</span>
-            </button>
-          )}
-        </div>
-        {wallpaperUrl && (
-          <div className="relative h-24 rounded-xl overflow-hidden border border-surface-700/50">
-            <img src={wallpaperUrl} alt="wallpaper" className="w-full h-full object-cover" />
+        <div className="space-y-4">
+          {/* 主题 */}
+          <div className="glass rounded-xl p-4">
+            <SettingLabel>主题</SettingLabel>
+            <div className="grid grid-cols-3 gap-2">
+              {([
+                { value: 'light', icon: Sun, label: '浅色' },
+                { value: 'dark', icon: Moon, label: '深色' },
+                { value: 'system', icon: Monitor, label: '跟随系统' },
+              ] as const).map((opt) => (
+                <button
+                  key={opt.value}
+                  onClick={() => applyTheme(opt.value)}
+                  className={`flex flex-col items-center gap-2 p-3 rounded-lg transition-all ${
+                    theme === opt.value
+                      ? 'bg-primary-500/15 text-primary-400 ring-1 ring-primary-500/30'
+                      : 'bg-surface-800 text-surface-400 hover:bg-surface-700'
+                  }`}
+                >
+                  <opt.icon className="w-5 h-5" />
+                  <span className="text-xs">{opt.label}</span>
+                </button>
+              ))}
+            </div>
           </div>
-        )}
-      </div>
 
-      {/* 字体大小 */}
-      <div className="space-y-3">
-        <label className="text-xs text-surface-400 font-medium uppercase tracking-wider">字体大小</label>
-        <div className="grid grid-cols-3 gap-2">
-          {([
-            { value: 'small', label: '小', size: '14px' },
-            { value: 'medium', label: '中', size: '16px' },
-            { value: 'large', label: '大', size: '18px' },
-          ] as const).map((opt) => (
-            <button
-              key={opt.value}
-              onClick={() => applyFontSize(opt.value)}
-              className={`flex flex-col items-center gap-1 p-3 rounded-xl border transition-all ${
-                fontSize === opt.value
-                  ? 'bg-primary-500/10 border-primary-500/30 text-primary-400'
-                  : 'bg-surface-800/50 border-surface-700/50 text-surface-400 hover:border-surface-600'
-              }`}
-            >
-              <Type className="w-5 h-5" />
-              <span className="text-xs">{opt.label}</span>
-              <span className="text-[10px] text-surface-500">{opt.size}</span>
-            </button>
-          ))}
+          {/* 壁纸 */}
+          <div className="glass rounded-xl p-4">
+            <SettingLabel>壁纸</SettingLabel>
+            <div className="flex gap-2">
+              <label className="flex-1 flex items-center justify-center gap-2 p-2.5 rounded-lg bg-surface-800 text-surface-300 text-sm hover:bg-surface-700 transition-colors cursor-pointer">
+                <Image className="w-4 h-4" />
+                <span>选择图片</span>
+                <input type="file" accept="image/*" className="hidden" onChange={handleWallpaperUpload} />
+              </label>
+              {wallpaperUrl && (
+                <button
+                  onClick={resetWallpaper}
+                  className="flex items-center justify-center gap-2 px-4 p-2.5 rounded-lg bg-surface-800 text-surface-300 text-sm hover:bg-red-500/15 hover:text-red-400 transition-colors"
+                >
+                  <RotateCcw className="w-4 h-4" />
+                  <span>重置</span>
+                </button>
+              )}
+            </div>
+            {wallpaperUrl && (
+              <div className="relative h-24 mt-3 rounded-lg overflow-hidden">
+                <img src={wallpaperUrl} alt="wallpaper" className="w-full h-full object-cover" />
+              </div>
+            )}
+          </div>
+
+          {/* 字体大小 */}
+          <div className="glass rounded-xl p-4">
+            <SettingLabel>字体大小</SettingLabel>
+            <div className="grid grid-cols-3 gap-2">
+              {([
+                { value: 'small', label: '小', size: '14px' },
+                { value: 'medium', label: '中', size: '16px' },
+                { value: 'large', label: '大', size: '18px' },
+              ] as const).map((opt) => (
+                <button
+                  key={opt.value}
+                  onClick={() => applyFontSize(opt.value)}
+                  className={`flex flex-col items-center gap-1 p-3 rounded-lg transition-all ${
+                    fontSize === opt.value
+                      ? 'bg-primary-500/15 text-primary-400 ring-1 ring-primary-500/30'
+                      : 'bg-surface-800 text-surface-400 hover:bg-surface-700'
+                  }`}
+                >
+                  <Type className="w-5 h-5" />
+                  <span className="text-xs">{opt.label}</span>
+                  <span className="text-[10px] text-surface-500">{opt.size}</span>
+                </button>
+              ))}
+            </div>
+          </div>
         </div>
       </div>
     </motion.div>
@@ -326,99 +343,95 @@ function OtherSettings({ onClose }: { onClose: () => void }) {
       initial={{ opacity: 0 }}
       animate={{ opacity: 1 }}
       exit={{ opacity: 0 }}
-      className="px-4 pb-6 space-y-6"
+      className="px-4 pb-6"
     >
-      <div className="flex items-center gap-3 mb-2">
-        <button
-          onClick={onClose}
-          className="p-1.5 rounded-lg text-surface-400 hover:text-surface-200 hover:bg-surface-800 transition-colors"
-        >
-          <ChevronRight className="w-5 h-5 rotate-180" />
-        </button>
-        <h2 className="text-base font-semibold text-surface-100">其它设置</h2>
-      </div>
+      <div className="max-w-2xl mx-auto w-full">
+        <SectionHeader icon={Clock} title="其它设置" onClose={onClose} />
 
-      {/* 定时关闭 */}
-      <div className="space-y-3">
-        <label className="text-xs text-surface-400 font-medium uppercase tracking-wider">定时关闭</label>
-        <div className="grid grid-cols-4 gap-2">
-          {([
-            { value: 'off', label: '关闭' },
-            { value: '15', label: '15分钟' },
-            { value: '30', label: '30分钟' },
-            { value: '60', label: '60分钟' },
-          ] as const).map((opt) => (
-            <button
-              key={opt.value}
-              onClick={() => applyTimer(opt.value)}
-              className={`p-2.5 rounded-xl border text-xs transition-all ${
-                timer === opt.value
-                  ? 'bg-primary-500/10 border-primary-500/30 text-primary-400'
-                  : 'bg-surface-800/50 border-surface-700/50 text-surface-400 hover:border-surface-600'
-              }`}
-            >
-              {opt.label}
-            </button>
-          ))}
-        </div>
-        {timer === 'custom' && (
-          <div className="flex items-center gap-2">
-            <input
-              type="number"
-              value={customMinutes}
-              onChange={(e) => {
-                setCustomMinutes(e.target.value)
-                localStorage.setItem('musicfree.timer.custom', e.target.value)
-              }}
-              className="w-20 px-3 py-2 bg-surface-800 border border-surface-700 rounded-xl text-sm text-surface-200"
-              min="1"
-              max="480"
-            />
-            <span className="text-xs text-surface-500">分钟</span>
+        <div className="space-y-4">
+          {/* 定时关闭 */}
+          <div className="glass rounded-xl p-4">
+            <SettingLabel>定时关闭</SettingLabel>
+            <div className="grid grid-cols-4 gap-2">
+              {([
+                { value: 'off', label: '关闭' },
+                { value: '15', label: '15分钟' },
+                { value: '30', label: '30分钟' },
+                { value: '60', label: '60分钟' },
+              ] as const).map((opt) => (
+                <button
+                  key={opt.value}
+                  onClick={() => applyTimer(opt.value)}
+                  className={`p-2.5 rounded-lg text-xs transition-all ${
+                    timer === opt.value
+                      ? 'bg-primary-500/15 text-primary-400 ring-1 ring-primary-500/30'
+                      : 'bg-surface-800 text-surface-400 hover:bg-surface-700'
+                  }`}
+                >
+                  {opt.label}
+                </button>
+              ))}
+            </div>
+            {timer === 'custom' && (
+              <div className="flex items-center gap-2 mt-3">
+                <input
+                  type="number"
+                  value={customMinutes}
+                  onChange={(e) => {
+                    setCustomMinutes(e.target.value)
+                    localStorage.setItem('musicfree.timer.custom', e.target.value)
+                  }}
+                  className="w-20 bg-surface-800 rounded-lg py-2 px-3 text-sm text-surface-100"
+                  min="1"
+                  max="480"
+                />
+                <span className="text-xs text-surface-500">分钟</span>
+              </div>
+            )}
           </div>
-        )}
-      </div>
 
-      {/* 语言 */}
-      <div className="space-y-3">
-        <label className="text-xs text-surface-400 font-medium uppercase tracking-wider">语言</label>
-        <div className="grid grid-cols-3 gap-2">
-          {([
-            { value: 'zh-CN', label: '简体中文' },
-            { value: 'zh-TW', label: '繁體中文' },
-            { value: 'en', label: 'English' },
-          ] as const).map((opt) => (
-            <button
-              key={opt.value}
-              onClick={() => applyLanguage(opt.value)}
-              className={`p-2.5 rounded-xl border text-xs transition-all ${
-                language === opt.value
-                  ? 'bg-primary-500/10 border-primary-500/30 text-primary-400'
-                  : 'bg-surface-800/50 border-surface-700/50 text-surface-400 hover:border-surface-600'
-              }`}
-            >
-              {opt.label}
-            </button>
-          ))}
-        </div>
-      </div>
+          {/* 语言 */}
+          <div className="glass rounded-xl p-4">
+            <SettingLabel>语言</SettingLabel>
+            <div className="grid grid-cols-3 gap-2">
+              {([
+                { value: 'zh-CN', label: '简体中文' },
+                { value: 'zh-TW', label: '繁體中文' },
+                { value: 'en', label: 'English' },
+              ] as const).map((opt) => (
+                <button
+                  key={opt.value}
+                  onClick={() => applyLanguage(opt.value)}
+                  className={`p-2.5 rounded-lg text-xs transition-all ${
+                    language === opt.value
+                      ? 'bg-primary-500/15 text-primary-400 ring-1 ring-primary-500/30'
+                      : 'bg-surface-800 text-surface-400 hover:bg-surface-700'
+                  }`}
+                >
+                  {opt.label}
+                </button>
+              ))}
+            </div>
+          </div>
 
-      {/* 备份与恢复 */}
-      <div className="space-y-3">
-        <label className="text-xs text-surface-400 font-medium uppercase tracking-wider">备份与恢复</label>
-        <div className="flex gap-2">
-          <button
-            onClick={handleExport}
-            className="flex-1 flex items-center justify-center gap-2 p-3 rounded-xl bg-surface-800/50 border border-surface-700/50 text-surface-400 hover:border-surface-600 transition-colors"
-          >
-            <Download className="w-4 h-4" />
-            <span className="text-xs">导出配置</span>
-          </button>
-          <label className="flex-1 flex items-center justify-center gap-2 p-3 rounded-xl bg-surface-800/50 border border-surface-700/50 text-surface-400 hover:border-surface-600 transition-colors cursor-pointer">
-            <Upload className="w-4 h-4" />
-            <span className="text-xs">导入配置</span>
-            <input type="file" accept=".json" className="hidden" onChange={handleImport} />
-          </label>
+          {/* 备份与恢复 */}
+          <div className="glass rounded-xl p-4">
+            <SettingLabel>备份与恢复</SettingLabel>
+            <div className="flex gap-2">
+              <button
+                onClick={handleExport}
+                className="flex-1 flex items-center justify-center gap-2 p-2.5 rounded-lg bg-surface-800 text-surface-300 text-sm hover:bg-surface-700 transition-colors"
+              >
+                <Download className="w-4 h-4" />
+                <span>导出配置</span>
+              </button>
+              <label className="flex-1 flex items-center justify-center gap-2 p-2.5 rounded-lg bg-surface-800 text-surface-300 text-sm hover:bg-surface-700 transition-colors cursor-pointer">
+                <Upload className="w-4 h-4" />
+                <span>导入配置</span>
+                <input type="file" accept=".json" className="hidden" onChange={handleImport} />
+              </label>
+            </div>
+          </div>
         </div>
       </div>
     </motion.div>
@@ -432,71 +445,67 @@ function AboutSection({ onClose }: { onClose: () => void }) {
       initial={{ opacity: 0 }}
       animate={{ opacity: 1 }}
       exit={{ opacity: 0 }}
-      className="px-4 pb-6 space-y-6"
+      className="px-4 pb-6"
     >
-      <div className="flex items-center gap-3 mb-2">
-        <button
-          onClick={onClose}
-          className="p-1.5 rounded-lg text-surface-400 hover:text-surface-200 hover:bg-surface-800 transition-colors"
-        >
-          <ChevronRight className="w-5 h-5 rotate-180" />
-        </button>
-        <h2 className="text-base font-semibold text-surface-100">网站说明</h2>
-      </div>
+      <div className="max-w-2xl mx-auto w-full">
+        <SectionHeader icon={Info} title="网站说明" onClose={onClose} />
 
-      <div className="space-y-4">
-        {/* Logo & 标题 */}
-        <div className="flex flex-col items-center py-6">
-          <div className="w-16 h-16 rounded-2xl bg-primary-500/20 flex items-center justify-center mb-3">
-            <Music2 className="w-8 h-8 text-primary-400" />
+        <div className="space-y-4">
+          {/* Logo & 标题 */}
+          <div className="glass rounded-xl p-6 flex flex-col items-center">
+            <div className="w-14 h-14 rounded-xl bg-gradient-to-br from-primary-500/20 to-primary-600/20 flex items-center justify-center mb-3">
+              <Music2 className="w-7 h-7 text-primary-400" />
+            </div>
+            <h3 className="text-base font-bold text-surface-100">MusicFreeWeb</h3>
+            <p className="text-xs text-surface-500 mt-1">插件化音乐播放器</p>
+            <span className="mt-2 px-2.5 py-0.5 rounded-full bg-surface-800 text-surface-500 text-[10px]">
+              {APP_VERSION}
+            </span>
           </div>
-          <h3 className="text-lg font-bold text-surface-100">MusicFreeWeb</h3>
-          <p className="text-xs text-surface-500 mt-1">插件化音乐播放器</p>
-          <span className="mt-2 px-2 py-0.5 rounded-full bg-surface-800 text-surface-500 text-[10px]">
-            {APP_VERSION}
-          </span>
-        </div>
 
-        {/* 关于 */}
-        <div className="p-4 rounded-2xl bg-surface-800/50 border border-surface-700/50 space-y-3">
-          <p className="text-sm text-surface-300 leading-relaxed">
-            MusicFreeWeb 是基于 MusicFree 开源项目的 Web 版本实现。
-          </p>
-          <p className="text-sm text-surface-300 leading-relaxed">
-            MusicFree 是一款插件化、定制化、无广告的免费音乐播放器，由猫头猫（maotoumao）开发并开源。
-          </p>
-          <p className="text-sm text-surface-300 leading-relaxed">
-            本项目的插件协议与 MusicFree 保持一致，所有插件均可在 MusicFree 桌面端和移动端通用。
-          </p>
-        </div>
+          {/* 关于 */}
+          <div className="glass rounded-xl p-4 space-y-3">
+            <p className="text-sm text-surface-300 leading-relaxed">
+              MusicFreeWeb 是基于 MusicFree 开源项目的 Web 版本实现。
+            </p>
+            <p className="text-sm text-surface-300 leading-relaxed">
+              MusicFree 是一款插件化、定制化、无广告的免费音乐播放器，由猫头猫（maotoumao）开发并开源。
+            </p>
+            <p className="text-sm text-surface-300 leading-relaxed">
+              本项目的插件协议与 MusicFree 保持一致，所有插件均可在 MusicFree 桌面端和移动端通用。
+            </p>
+          </div>
 
-        {/* 链接 */}
-        <div className="space-y-2">
-          <a
-            href="https://github.com/maotoumao/MusicFreeDesktop"
-            target="_blank"
-            rel="noopener noreferrer"
-            className="flex items-center gap-3 p-3 rounded-xl bg-surface-800/50 border border-surface-700/50 hover:bg-surface-700/50 transition-colors"
-          >
-            <ExternalLink className="w-4 h-4 text-primary-400 flex-shrink-0" />
-            <span className="text-sm text-surface-300">MusicFree 官方项目</span>
-          </a>
-          <a
-            href="https://gitee.com/koujiao/MusicFreeWeb-tianpeng"
-            target="_blank"
-            rel="noopener noreferrer"
-            className="flex items-center gap-3 p-3 rounded-xl bg-surface-800/50 border border-surface-700/50 hover:bg-surface-700/50 transition-colors"
-          >
-            <ExternalLink className="w-4 h-4 text-primary-400 flex-shrink-0" />
-            <span className="text-sm text-surface-300">本项目源代码</span>
-          </a>
-        </div>
+          {/* 链接 */}
+          <div className="glass rounded-xl overflow-hidden">
+            <a
+              href="https://github.com/maotoumao/MusicFreeDesktop"
+              target="_blank"
+              rel="noopener noreferrer"
+              className="flex items-center gap-3 p-4 hover:bg-surface-700/30 transition-colors border-b border-surface-800"
+            >
+              <ExternalLink className="w-4 h-4 text-primary-400 flex-shrink-0" />
+              <span className="text-sm text-surface-300 flex-1">MusicFree 官方项目</span>
+              <ChevronRight className="w-4 h-4 text-surface-600" />
+            </a>
+            <a
+              href="https://gitee.com/koujiao/MusicFreeWeb-tianpeng"
+              target="_blank"
+              rel="noopener noreferrer"
+              className="flex items-center gap-3 p-4 hover:bg-surface-700/30 transition-colors"
+            >
+              <ExternalLink className="w-4 h-4 text-primary-400 flex-shrink-0" />
+              <span className="text-sm text-surface-300 flex-1">本项目源代码</span>
+              <ChevronRight className="w-4 h-4 text-surface-600" />
+            </a>
+          </div>
 
-        {/* 协议 */}
-        <div className="p-4 rounded-2xl bg-surface-800/30 border border-surface-700/30">
-          <p className="text-xs text-surface-500 text-center">
-            MusicFree 遵循 AGPL-3.0 协议开源
-          </p>
+          {/* 协议 */}
+          <div className="glass rounded-xl p-4">
+            <p className="text-xs text-surface-500 text-center">
+              MusicFree 遵循 AGPL-3.0 协议开源
+            </p>
+          </div>
         </div>
       </div>
     </motion.div>
