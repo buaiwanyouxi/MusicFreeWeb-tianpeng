@@ -1698,14 +1698,29 @@ const adaptMusicFreePlugin = (
   _proxiedFetch: typeof fetch
 ): MusicPlugin => {
   console.log('[adaptMusicFreePlugin] 适配插件:', native.platform, '支持类型:', native.supportedSearchType)
-  
+
   const supportedTypes = native.supportedSearchType || ['music']
-  
+
+  // 动态检测插件能力
+  const detectedCapabilities: string[] = ['search', 'stream']
+  if (typeof native.importMusicSheet === 'function') {
+    detectedCapabilities.push('importSheet')
+  }
+  if (typeof native.importVideo === 'function') {
+    detectedCapabilities.push('importVideo')
+  }
+  // 音质选择能力：如果 getMediaSource 存在则认为支持
+  if (typeof native.getMediaSource === 'function') {
+    detectedCapabilities.push('qualitySelect')
+  }
+
+  console.log('[adaptMusicFreePlugin] 检测到的能力:', detectedCapabilities)
+
   return {
     name: native.platform,
     version: native.version,
     author: native.author,
-    capabilities: ['search', 'stream'],
+    capabilities: detectedCapabilities as any,
     supportedSearchTypes: supportedTypes.map(t => {
       if (t === 'music' || t === 'song') return 'music'
       if (t === 'artist' || t === 'singer') return 'artist'

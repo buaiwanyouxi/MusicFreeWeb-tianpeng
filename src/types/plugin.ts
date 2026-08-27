@@ -18,7 +18,7 @@ export type InstalledPlugin = PluginDescriptor & {
   installedAt: number
 }
 
-export type PluginCapability = 'search' | 'lyrics' | 'playlist' | 'stream'
+export type PluginCapability = 'search' | 'lyrics' | 'playlist' | 'stream' | 'importSheet' | 'importVideo' | 'userVariables' | 'qualitySelect'
 
 export type PluginTrack = {
   id: string

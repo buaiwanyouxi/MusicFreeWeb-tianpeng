@@ -17,7 +17,15 @@ export function ImportSheetDialog({ open, onClose }: ImportSheetDialogProps) {
   const [error, setError] = useState<string | null>(null)
   const [success, setSuccess] = useState<string | null>(null)
 
-  const readyPlugins = plugins.filter(p => p.status === 'ready')
+  // 根据类型过滤具有相应能力的插件
+  const readyPlugins = plugins.filter(p => {
+    if (p.status !== 'ready' || !p.instance) return false
+    if (type === 'music') {
+      return p.instance.capabilities?.includes('importSheet')
+    } else {
+      return p.instance.capabilities?.includes('importVideo')
+    }
+  })
 
   const handleSubmit = async () => {
     if (!url.trim()) {
@@ -138,7 +146,9 @@ export function ImportSheetDialog({ open, onClose }: ImportSheetDialogProps) {
                 <label className="block text-xs text-surface-400 mb-1.5">使用插件</label>
                 {readyPlugins.length === 0 ? (
                   <p className="text-xs text-surface-500 bg-surface-800/50 rounded-lg p-3">
-                    暂无可用插件，请先在插件管理中添加订阅源
+                    {type === 'music'
+                      ? '暂无支持导入歌单的插件，请检查插件是否支持此功能'
+                      : '暂无支持导入视频的插件，请检查插件是否支持此功能'}
                   </p>
                 ) : (
                   <select

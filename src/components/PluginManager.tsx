@@ -472,7 +472,28 @@ function SubscriptionsTab() {
                                 <span className={`text-sm flex-1 truncate ${plugin.meta.enabled ? 'text-surface-200' : 'text-surface-500'}`}>
                                   {plugin.meta.name}
                                 </span>
-                                
+
+                                {/* 能力标签 */}
+                                {plugin.status === 'ready' && plugin.instance && (
+                                  <div className="flex items-center gap-1">
+                                    {plugin.instance.capabilities?.includes('importSheet') && (
+                                      <span className="text-[10px] px-1.5 py-0.5 rounded bg-blue-500/10 text-blue-400 border border-blue-500/20" title="支持导入歌单">
+                                        歌单
+                                      </span>
+                                    )}
+                                    {plugin.instance.capabilities?.includes('importVideo') && (
+                                      <span className="text-[10px] px-1.5 py-0.5 rounded bg-purple-500/10 text-purple-400 border border-purple-500/20" title="支持导入视频">
+                                        视频
+                                      </span>
+                                    )}
+                                    {plugin.instance.capabilities?.includes('qualitySelect') && (
+                                      <span className="text-[10px] px-1.5 py-0.5 rounded bg-green-500/10 text-green-400 border border-green-500/20" title="支持音质选择">
+                                        音质
+                                      </span>
+                                    )}
+                                  </div>
+                                )}
+
                                 {plugin.meta.version && (
                                   <span className="text-xs text-surface-500">
                                     v{plugin.meta.version}

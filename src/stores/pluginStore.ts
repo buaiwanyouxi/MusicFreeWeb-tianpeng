@@ -721,18 +721,18 @@ export const usePluginStore = create<PluginStoreState>((set, get) => ({
   
   // 导入预设配置（将 feeds.default.json 作为一个订阅源添加）
   importDefaultFeeds: async () => {
-    // 预设配置的 URL（使用相对路径，指向本地的 feeds.default.json）
-    const defaultFeedUrl = `${window.location.origin}/feeds.default.json`
-    
+    // 预设配置的 URL（MusicFreeTool 订阅源）
+    const defaultFeedUrl = 'https://music.nairocy.com/plugins.json'
+
     // 检查是否已存在
-    if (get().subscriptions.some(s => s.url === defaultFeedUrl || s.url === '/feeds.default.json')) {
+    if (get().subscriptions.some(s => s.url === defaultFeedUrl)) {
       console.log('[Subscription] 预设配置已存在')
       return
     }
-    
+
     try {
       console.log('[Subscription] 开始导入预设配置...')
-      await get().addSubscription(defaultFeedUrl, '预设音乐源')
+      await get().addSubscription(defaultFeedUrl, 'MusicFreeTool')
       console.log('[Subscription] 预设配置导入完成')
     } catch (error) {
       console.error('[Subscription] 导入预设配置失败:', error)
