@@ -1,6 +1,6 @@
 {
-  "name": "MusicFree H5 - 插件化音乐播放器",
-  "short_name": "MusicFree",
+  "name": "MusicFreeWeb - 插件化音乐播放器",
+  "short_name": "MusicFreeWeb",
   "description": "插件化音乐播放器，支持多平台音乐源",
   "start_url": "/",
   "display": "standalone",

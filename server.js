@@ -166,6 +166,14 @@ const proxyTargets = {
     target: 'https://cdnmusic.migu.cn',
     headers: { referer: 'https://music.migu.cn/' },
   },
+  migu_app_u: {
+    target: 'https://app.u.nf.migu.cn',
+    headers: { referer: 'https://music.migu.cn/' },
+  },
+  migu_app_c: {
+    target: 'https://app.c.nf.migu.cn',
+    headers: { referer: 'https://music.migu.cn/' },
+  },
   
   // ============ 插件托管 (kstore.vip) ============
   kstore: {

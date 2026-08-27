@@ -51,6 +51,8 @@ const pickDefaultRecommendTagId = (tags: PluginRecommendTag[]): string | null =>
 
 // 缓存相关常量
 const CACHE_KEY_SUBSCRIPTIONS = 'musicfree.subscriptions'
+const CACHE_KEY_USER_VARIABLES = 'musicfree.userVariables'
+const CACHE_KEY_IMPORTED_SHEETS = 'musicfree.importedSheets'
 const CACHE_KEY_PLUGINS = 'musicfree.plugins.cache'
 const CACHE_KEY_ACTIVE_PLUGIN = 'musicfree.active.plugin'
 const CACHE_KEY_TOP_LISTS = 'musicfree.toplists.cache'
@@ -75,6 +77,19 @@ interface PluginCache {
   timestamp: number
 }
 
+// 导入的歌单数据
+interface ImportedSheet {
+  id: string
+  pluginId: string
+  type: 'music' | 'video'
+  url: string
+  title: string
+  artist?: string
+  coverUrl?: string
+  tracks: PluginTrack[]
+  importedAt: number
+}
+
 // 保存订阅源列表
 const saveSubscriptions = (subscriptions: Subscription[]) => {
   try {
@@ -88,6 +103,43 @@ const saveSubscriptions = (subscriptions: Subscription[]) => {
 const loadSubscriptions = (): Subscription[] => {
   try {
     const raw = localStorage.getItem(CACHE_KEY_SUBSCRIPTIONS)
+    if (!raw) return []
+    return JSON.parse(raw)
+  } catch {
+    return []
+  }
+}
+
+// 用户变量持久化
+const saveUserVariables = (vars: Record<string, Record<string, string>>) => {
+  try {
+    localStorage.setItem(CACHE_KEY_USER_VARIABLES, JSON.stringify(vars))
+  } catch (e) {
+    console.warn('[Cache] 保存用户变量失败:', e)
+  }
+}
+
+const loadUserVariables = (): Record<string, Record<string, string>> => {
+  try {
+    const raw = localStorage.getItem(CACHE_KEY_USER_VARIABLES)
+    if (!raw) return {}
+    return JSON.parse(raw)
+  } catch {
+    return {}
+  }
+}
+
+const saveImportedSheets = (sheets: ImportedSheet[]) => {
+  try {
+    localStorage.setItem(CACHE_KEY_IMPORTED_SHEETS, JSON.stringify(sheets))
+  } catch (e) {
+    console.warn('[Cache] 保存导入歌单失败:', e)
+  }
+}
+
+const loadImportedSheets = (): ImportedSheet[] => {
+  try {
+    const raw = localStorage.getItem(CACHE_KEY_IMPORTED_SHEETS)
     if (!raw) return []
     return JSON.parse(raw)
   } catch {
@@ -371,9 +423,17 @@ export interface PluginStoreState {
   importDefaultFeeds: () => Promise<void>
   clearAllSubscriptions: () => void
   
+  // 用户变量
+  pluginUserVariables: Record<string, Record<string, string>>
+  setUserVariable: (pluginId: string, key: string, value: string) => void
+  removeUserVariable: (pluginId: string, key: string) => void
+  
   // 插件管理
   loadAllPlugins: () => Promise<void>
   reloadPlugin: (pluginId: string) => Promise<void>
+  removePlugin: (pluginId: string) => void
+  updatePlugin: (pluginId: string) => Promise<void>
+  togglePluginEnabled: (pluginId: string) => void
   setActivePlugin: (pluginId: string | null, force?: boolean) => void
   
   // 搜索
@@ -395,16 +455,39 @@ export interface PluginStoreState {
   loadMoreDetailTracks: () => Promise<void>
   clearDetail: () => void
   
+  // 导入歌单/视频
+  importedSheets: ImportedSheet[]
+  importMusicSheet: (pluginId: string, url: string) => Promise<void>
+  importVideo: (pluginId: string, url: string) => Promise<void>
+  removeImportedSheet: (sheetId: string) => void
+
   // 获取激活的插件实例
   getActivePluginInstance: () => MusicPlugin | null
   getReadyPlugins: () => LoadedPlugin[]
-  
+
   // 初始化
   init: () => Promise<void>
 }
 
 export const usePluginStore = create<PluginStoreState>((set, get) => ({
   subscriptions: [],
+  pluginUserVariables: loadUserVariables(),
+  setUserVariable: (pluginId: string, key: string, value: string) => {
+    const vars = { ...get().pluginUserVariables }
+    if (!vars[pluginId]) vars[pluginId] = {}
+    vars[pluginId] = { ...vars[pluginId], [key]: value }
+    set({ pluginUserVariables: vars })
+    saveUserVariables(vars)
+  },
+  removeUserVariable: (pluginId: string, key: string) => {
+    const vars = { ...get().pluginUserVariables }
+    if (vars[pluginId]) {
+      delete vars[pluginId][key]
+      if (Object.keys(vars[pluginId]).length === 0) delete vars[pluginId]
+    }
+    set({ pluginUserVariables: vars })
+    saveUserVariables(vars)
+  },
   plugins: [],
   pluginsLoading: false,
   activePluginId: null,
@@ -805,6 +888,92 @@ export const usePluginStore = create<PluginStoreState>((set, get) => ({
     }
   },
   
+  removePlugin: (pluginId: string) => {
+    const { plugins, activePluginId } = get()
+    const plugin = plugins.find(p => p.meta.id === pluginId)
+    if (!plugin) return
+
+    const newPlugins = plugins.filter(p => p.meta.id !== pluginId)
+    set({ plugins: newPlugins })
+
+    // 如果移除的是当前活跃插件，切换到第一个可用插件
+    if (activePluginId === pluginId) {
+      const nextPlugin = newPlugins.find(p => p.status === 'ready')
+      get().setActivePlugin(nextPlugin?.meta.id ?? null)
+    }
+
+    // 从缓存中移除该插件的描述符
+    const caches = loadPluginsCache()
+    const updatedCaches = caches.map(cache => ({
+      ...cache,
+      plugins: cache.plugins.filter(desc => {
+        const id = generatePluginId(cache.subscriptionId, desc)
+        return id !== pluginId
+      }),
+    })).filter(cache => cache.plugins.length > 0)
+    savePluginsCache(updatedCaches)
+
+    console.log('[Plugin] 已移除插件:', plugin.meta.name)
+  },
+
+  updatePlugin: async (pluginId: string) => {
+    const { plugins } = get()
+    const plugin = plugins.find(p => p.meta.id === pluginId)
+    if (!plugin) return
+
+    console.log('[Plugin] 更新插件:', plugin.meta.name)
+    set({
+      plugins: plugins.map(p =>
+        p.meta.id === pluginId ? { ...p, status: 'loading' as const, error: undefined } : p
+      ),
+    })
+
+    try {
+      // 强制重新下载插件代码（跳过缓存）
+      const freshInstance = await forceLoadPluginInstance(plugin.meta)
+      set({
+        plugins: get().plugins.map(p =>
+          p.meta.id === pluginId
+            ? { ...p, status: 'ready' as const, instance: freshInstance, error: undefined }
+            : p
+        ),
+      })
+      console.log('[Plugin] 插件更新成功:', plugin.meta.name)
+    } catch (error) {
+      set({
+        plugins: get().plugins.map(p =>
+          p.meta.id === pluginId
+            ? { ...p, status: 'error' as const, error: error instanceof Error ? error.message : String(error) }
+            : p
+        ),
+      })
+      console.error('[Plugin] 插件更新失败:', plugin.meta.name, error)
+    }
+  },
+
+  togglePluginEnabled: (pluginId: string) => {
+    const { plugins, activePluginId } = get()
+    const plugin = plugins.find(p => p.meta.id === pluginId)
+    if (!plugin) return
+
+    const newEnabled = !plugin.meta.enabled
+    set({
+      plugins: plugins.map(p =>
+        p.meta.id === pluginId
+          ? { ...p, meta: { ...p.meta, enabled: newEnabled } }
+          : p
+      ),
+    })
+
+    // 如果禁用了当前活跃插件，切换到其他可用插件
+    if (!newEnabled && activePluginId === pluginId) {
+      const nextPlugin = plugins.find(p => p.meta.id !== pluginId && p.meta.enabled && p.status === 'ready')
+      get().setActivePlugin(nextPlugin?.meta.id ?? null)
+    }
+
+    console.log('[Plugin] 插件', newEnabled ? '启用' : '禁用', ':', plugin.meta.name)
+  },
+
   setActivePlugin: (pluginId, force = false) => {
     set({
       activePluginId: pluginId,
@@ -1656,20 +1825,81 @@ export const usePluginStore = create<PluginStoreState>((set, get) => ({
     ])
   },
   
+  importedSheets: loadImportedSheets(),
+
+  importMusicSheet: async (pluginId: string, url: string) => {
+    const { plugins } = get()
+    const plugin = plugins.find(p => p.meta.id === pluginId && p.status === 'ready')
+    if (!plugin?.instance) throw new Error('插件未就绪')
+    if (!plugin.instance.importMusicSheet) throw new Error('该插件不支持导入歌单')
+
+    const result = await plugin.instance.importMusicSheet(url)
+    const sheet: ImportedSheet = {
+      id: result.id || `import_${Date.now()}`,
+      pluginId,
+      type: 'music',
+      url,
+      title: result.title || '导入歌单',
+      artist: result.artist,
+      coverUrl: result.coverUrl,
+      tracks: result.tracks || [],
+      importedAt: Date.now(),
+    }
+
+    const sheets = [sheet, ...get().importedSheets]
+    set({ importedSheets: sheets })
+    saveImportedSheets(sheets)
+  },
+
+  importVideo: async (pluginId: string, url: string) => {
+    const { plugins } = get()
+    const plugin = plugins.find(p => p.meta.id === pluginId && p.status === 'ready')
+    if (!plugin?.instance) throw new Error('插件未就绪')
+    if (!plugin.instance.importVideo) throw new Error('该插件不支持导入视频')
+
+    const result = await plugin.instance.importVideo(url)
+    const sheet: ImportedSheet = {
+      id: result.id || `import_video_${Date.now()}`,
+      pluginId,
+      type: 'video',
+      url,
+      title: result.title || '导入视频',
+      artist: result.artist,
+      coverUrl: result.coverUrl,
+      tracks: result.tracks || [],
+      importedAt: Date.now(),
+    }
+
+    const sheets = [sheet, ...get().importedSheets]
+    set({ importedSheets: sheets })
+    saveImportedSheets(sheets)
+  },
+
+  removeImportedSheet: (sheetId: string) => {
+    const sheets = get().importedSheets.filter(s => s.id !== sheetId)
+    set({ importedSheets: sheets })
+    saveImportedSheets(sheets)
+  },
+
   getActivePluginInstance: () => {
     const { activePluginId, plugins } = get()
     if (!activePluginId) return null
     const plugin = plugins.find((p) => p.meta.id === activePluginId)
     return plugin?.instance ?? null
   },
-  
+
   getReadyPlugins: () => {
     const { plugins } = get()
     return plugins.filter((p) => p.status === 'ready')
   },
-  
+
   init: async () => {
     console.log('[Init] 初始化插件系统...')
+    
+    // 注册用户变量读取函数到全局（供插件沙箱中的 env.getUserVariables 使用）
+    ;(globalThis as any).__musicfree_getUserVariables = (pluginId: string) => {
+      return get().pluginUserVariables[pluginId] ?? {}
+    }
     
     // 加载保存的订阅源
     const savedSubscriptions = loadSubscriptions()

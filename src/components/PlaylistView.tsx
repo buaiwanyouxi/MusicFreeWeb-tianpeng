@@ -1,9 +1,9 @@
 import { useState, useEffect, useRef, useCallback } from 'react'
 import { motion, AnimatePresence } from 'framer-motion'
-import { 
-  Music, 
-  Play, 
-  Trash2, 
+import {
+  Music,
+  Play,
+  Trash2,
   ListX,
   GripVertical,
   Pause,
@@ -19,13 +19,15 @@ import {
   Plus,
   Check,
   HardDrive,
+  Download,
 } from 'lucide-react'
 import { usePlayerStore } from '../stores/playerStore'
 import { useFavoriteStore } from '../stores/favoriteStore'
 import { usePluginStore } from '../stores/pluginStore'
 import { isSongCached, getAllCachedSongs, deleteSongCache, clearAllSongCache, getCacheStats, type CachedSong } from '../lib/songCache'
+import { ImportSheetDialog } from './ImportSheetDialog'
 import type { PluginTrack, PluginArtist, PluginAlbum, PluginPlaylist } from '../types/plugin'
-type MainTabId = 'current' | 'history' | 'favorites' | 'cache'
+type MainTabId = 'current' | 'history' | 'favorites' | 'cache' | 'imported'
 type FavoriteTabId = 'songs' | 'artists' | 'albums' | 'playlists'
 type DetailType = 'artist' | 'album' | 'playlist' | null
 
@@ -61,7 +63,8 @@ export function PlaylistView() {
   } = usePlayerStore()
   
   const favoriteStore = useFavoriteStore()
-  const { getActivePluginInstance } = usePluginStore()
+  const { getActivePluginInstance, importedSheets, removeImportedSheet } = usePluginStore()
+  const [showImportDialog, setShowImportDialog] = useState(false)
   
   // 初始化收藏
   useEffect(() => {
@@ -259,6 +262,24 @@ export function PlaylistView() {
             <HardDrive className="w-4 h-4" />
             <span>缓存</span>
           </button>
+          <button
+            onClick={() => setMainTab('imported')}
+            className={`flex-1 flex items-center justify-center gap-1.5 py-2 rounded-lg text-sm font-medium transition-all ${
+              mainTab === 'imported'
+                ? 'bg-primary-500 text-surface-950'
+                : 'text-surface-400 hover:text-surface-200'
+            }`}
+          >
+            <Download className="w-4 h-4" />
+            <span>导入</span>
+            {importedSheets.length > 0 && (
+              <span className={`text-xs px-1.5 py-0.5 rounded ${
+                mainTab === 'imported' ? 'bg-surface-950/20' : 'bg-surface-700'
+              }`}>
+                {importedSheets.length}
+              </span>
+            )}
+          </button>
         </div>
       </div>
       
@@ -346,8 +367,29 @@ export function PlaylistView() {
             onPlay={handlePlay}
           />
         </div>
-        
+
+        {/* 导入歌单 - 保持挂载 */}
+        <div
+          className={`absolute inset-0 flex flex-col transition-opacity duration-200 ${
+            mainTab === 'imported' ? 'opacity-100 z-10 pointer-events-auto' : 'opacity-0 z-0 pointer-events-none'
+          }`}
+        >
+          <ImportedSheetsView
+            sheets={importedSheets}
+            currentTrack={currentTrack}
+            isPlaying={isPlaying}
+            onRemove={removeImportedSheet}
+            onImport={() => setShowImportDialog(true)}
+          />
+        </div>
+
       </div>
+
+      {/* 导入对话框 */}
+      <ImportSheetDialog
+        open={showImportDialog}
+        onClose={() => setShowImportDialog(false)}
+      />
       
       {/* 详情页 - 使用 AnimatePresence 作为覆盖层，不影响列表状态 */}
       <AnimatePresence>
@@ -1678,6 +1720,193 @@ function CacheListView({
             </div>
           )}
         </div>
+      </div>
+    </div>
+  )
+}
+
+// 导入歌单视图
+interface ImportedSheetData {
+  id: string
+  pluginId: string
+  type: 'music' | 'video'
+  url: string
+  title: string
+  artist?: string
+  coverUrl?: string
+  tracks: PluginTrack[]
+  importedAt: number
+}
+
+function ImportedSheetsView({
+  sheets,
+  currentTrack,
+  isPlaying,
+  onRemove,
+  onImport,
+}: {
+  sheets: ImportedSheetData[]
+  currentTrack: PluginTrack | null
+  isPlaying: boolean
+  onRemove: (sheetId: string) => void
+  onImport: () => void
+}) {
+  const [expandedSheetId, setExpandedSheetId] = useState<string | null>(null)
+  const { setPlaylist, setCurrentTrack, setIsPlaying, addToPlaylist } = usePlayerStore()
+
+  const handlePlaySheet = (sheet: ImportedSheetData) => {
+    if (sheet.tracks.length === 0) return
+    setPlaylist(sheet.tracks, sheet.title)
+    setCurrentTrack(sheet.tracks[0])
+    setIsPlaying(true)
+  }
+
+  const handlePlayTrack = (sheet: ImportedSheetData, track: PluginTrack) => {
+    if (currentTrack?.id === track.id) {
+      setIsPlaying(!isPlaying)
+    } else {
+      setPlaylist(sheet.tracks, sheet.title)
+      setCurrentTrack(track)
+      setIsPlaying(true)
+    }
+  }
+
+  const formatDate = (timestamp: number) => {
+    const date = new Date(timestamp)
+    return `${date.getMonth() + 1}/${date.getDate()} ${date.getHours()}:${String(date.getMinutes()).padStart(2, '0')}`
+  }
+
+  return (
+    <div className="flex-1 flex flex-col overflow-hidden">
+      <div className="flex items-center justify-between px-4 py-3 border-b border-surface-800">
+        <div>
+          <h2 className="text-sm font-semibold text-surface-100">导入的歌单</h2>
+          <p className="text-xs text-surface-500 mt-0.5">共 {sheets.length} 个</p>
+        </div>
+        <button
+          onClick={onImport}
+          className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-primary-500/10 text-primary-400 text-xs font-medium hover:bg-primary-500/20 transition-colors"
+        >
+          <Plus className="w-3.5 h-3.5" />
+          导入
+        </button>
+      </div>
+
+      <div className="flex-1 overflow-y-auto px-3 py-2 space-y-2">
+        {sheets.length === 0 ? (
+          <div className="flex flex-col items-center justify-center h-full text-center py-12">
+            <Download className="w-10 h-10 text-surface-600 mb-3" />
+            <p className="text-sm text-surface-400 mb-1">暂无导入的歌单</p>
+            <p className="text-xs text-surface-600 mb-4">点击"导入"按钮，粘贴歌单或视频链接</p>
+            <button
+              onClick={onImport}
+              className="px-4 py-2 rounded-xl bg-primary-500/10 text-primary-400 text-xs font-medium hover:bg-primary-500/20 transition-colors"
+            >
+              导入歌单
+            </button>
+          </div>
+        ) : (
+          sheets.map(sheet => {
+            const isExpanded = expandedSheetId === sheet.id
+            return (
+              <motion.div
+                key={sheet.id}
+                layout
+                className="bg-surface-800/50 rounded-xl border border-surface-700/50 overflow-hidden"
+              >
+                <div
+                  className="flex items-center gap-3 p-3 cursor-pointer hover:bg-surface-700/30 transition-colors"
+                  onClick={() => setExpandedSheetId(isExpanded ? null : sheet.id)}
+                >
+                  <div className="w-10 h-10 rounded-lg bg-surface-700 flex items-center justify-center flex-shrink-0">
+                    {sheet.type === 'music' ? (
+                      <Music className="w-5 h-5 text-primary-400" />
+                    ) : (
+                      <ListMusic className="w-5 h-5 text-blue-400" />
+                    )}
+                  </div>
+                  <div className="flex-1 min-w-0">
+                    <h3 className="text-sm font-medium text-surface-200 truncate">{sheet.title}</h3>
+                    <p className="text-xs text-surface-500 mt-0.5">
+                      {sheet.tracks.length} 首 · {formatDate(sheet.importedAt)}
+                    </p>
+                  </div>
+                  <div className="flex items-center gap-1">
+                    <button
+                      onClick={(e) => { e.stopPropagation(); handlePlaySheet(sheet) }}
+                      className="w-7 h-7 rounded-lg flex items-center justify-center text-primary-400 hover:bg-primary-500/10 transition-colors"
+                      title="播放全部"
+                    >
+                      <Play className="w-4 h-4" />
+                    </button>
+                    <button
+                      onClick={(e) => {
+                        e.stopPropagation()
+                        if (confirm('确定要删除这个导入的歌单吗？')) {
+                          onRemove(sheet.id)
+                        }
+                      }}
+                      className="w-7 h-7 rounded-lg flex items-center justify-center text-surface-500 hover:text-red-400 hover:bg-red-500/10 transition-colors"
+                      title="删除"
+                    >
+                      <Trash2 className="w-3.5 h-3.5" />
+                    </button>
+                  </div>
+                </div>
+
+                <AnimatePresence>
+                  {isExpanded && (
+                    <motion.div
+                      initial={{ height: 0, opacity: 0 }}
+                      animate={{ height: 'auto', opacity: 1 }}
+                      exit={{ height: 0, opacity: 0 }}
+                      transition={{ duration: 0.2 }}
+                      className="overflow-hidden border-t border-surface-700/50"
+                    >
+                      <div className="max-h-64 overflow-y-auto">
+                        {sheet.tracks.map((track, idx) => {
+                          const isCurrent = currentTrack?.id === track.id
+                          return (
+                            <div
+                              key={track.id || idx}
+                              onClick={() => handlePlayTrack(sheet, track)}
+                              className={`flex items-center gap-2 px-3 py-2 cursor-pointer transition-colors ${
+                                isCurrent ? 'bg-primary-500/10' : 'hover:bg-surface-700/30'
+                              }`}
+                            >
+                              <span className={`w-5 text-xs text-center flex-shrink-0 ${
+                                isCurrent ? 'text-primary-400' : 'text-surface-600'
+                              }`}>
+                                {idx + 1}
+                              </span>
+                              <div className="flex-1 min-w-0">
+                                <p className={`text-xs truncate ${
+                                  isCurrent ? 'text-primary-400 font-medium' : 'text-surface-300'
+                                }`}>
+                                  {track.title}
+                                </p>
+                                <p className="text-[10px] text-surface-500 truncate">
+                                  {track.artists?.join(' / ') || '未知'}
+                                </p>
+                              </div>
+                              <button
+                                onClick={(e) => { e.stopPropagation(); addToPlaylist(track) }}
+                                className="w-6 h-6 rounded flex items-center justify-center text-surface-500 hover:text-primary-400 hover:bg-primary-500/10 opacity-0 group-hover:opacity-100 transition-all"
+                                title="添加到播放列表"
+                              >
+                                <Plus className="w-3 h-3" />
+                              </button>
+                            </div>
+                          )
+                        })}
+                      </div>
+                    </motion.div>
+                  )}
+                </AnimatePresence>
+              </motion.div>
+            )
+          })
+        )}
       </div>
     </div>
   )

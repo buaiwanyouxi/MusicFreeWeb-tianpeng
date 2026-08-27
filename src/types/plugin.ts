@@ -107,6 +107,8 @@ export type MusicPlugin = {
   getTopListDetail?(playlist: PluginPlaylist): Promise<{ topListItem?: PluginPlaylist; musicList?: PluginTrack[] }>
   getRecommendSheetTags?(): Promise<PluginRecommendTag[]>
   getRecommendSheetsByTag?(tag: PluginRecommendTag | string, page?: number): Promise<SearchResult<PluginPlaylist>>
+  importMusicSheet?(url: string): Promise<PluginPlaylist & { tracks?: PluginTrack[] }>
+  importVideo?(url: string): Promise<PluginPlaylist & { tracks?: PluginTrack[] }>
 }
 
 export type LoadedPlugin = {

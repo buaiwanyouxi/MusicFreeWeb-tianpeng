@@ -637,6 +637,7 @@ function App() {
   
   // 当 currentStream 改变时加载音频
   useEffect(() => {
+    const loadAudio = async () => {
     const audio = audioRef.current
     if (!audio || !currentStream) {
       // 释放旧的 blob URL
@@ -674,11 +675,28 @@ function App() {
     
     // 检查是否是 blob URL（来自缓存）
     const isBlobUrl = (currentStream as any)?._isBlobUrl
+    const streamHeaders = (currentStream as any)?.headers as Record<string, string> | undefined
     let newSrc: string = currentStream.url
     
     if (isBlobUrl) {
       currentBlobUrlRef.current = currentStream.url
       console.log('[Audio] 使用缓存的 blob URL，trackId:', currentTrack?.id, 'title:', currentTrack?.title)
+    } else if (streamHeaders && Object.keys(streamHeaders).length > 0) {
+      // 有自定义 headers，需要通过 fetch + blob 方式加载（浏览器 audio 元素不支持自定义 headers）
+      console.log('[Audio] 检测到自定义 headers，使用 fetch+blob 方式加载，trackId:', currentTrack?.id, 'headers:', Object.keys(streamHeaders))
+      try {
+        const response = await fetch(currentStream.url, { headers: streamHeaders })
+        if (!response.ok) throw new Error(`HTTP ${response.status}`)
+        const blob = await response.blob()
+        const blobUrl = URL.createObjectURL(blob)
+        currentBlobUrlRef.current = blobUrl
+        newSrc = blobUrl
+        console.log('[Audio] fetch+blob 加载成功，blob size:', blob.size, 'type:', blob.type)
+      } catch (error) {
+        console.error('[Audio] fetch+blob 加载失败，回退到直接 URL:', error)
+        currentBlobUrlRef.current = null
+        newSrc = currentStream.url
+      }
     } else {
       console.log('[Audio] 使用原始 URL，trackId:', currentTrack?.id, 'title:', currentTrack?.title, 'url:', currentStream.url.substring(0, 60))
       currentBlobUrlRef.current = null
@@ -823,13 +841,15 @@ function App() {
     // 如果音频已经完全加载，立即缓存（同步检查）
     console.log('[SongCache] 检查立即缓存条件：readyState=', audio.readyState, 'HAVE_ENOUGH_DATA=', HTMLMediaElement.HAVE_ENOUGH_DATA, 'pendingCacheTrackRef=', !!pendingCacheTrackRef.current, 'isStreamFromCache=', isStreamFromCacheRef.current)
     if (audio.readyState >= HTMLMediaElement.HAVE_ENOUGH_DATA && pendingCacheTrackRef.current && !isStreamFromCacheRef.current) {
-      const { track, stream, lyrics } = pendingCacheTrackRef.current
+      const { track, stream } = pendingCacheTrackRef.current
       console.log('[SongCache] ✓ 音频已完全加载，立即缓存完整歌曲数据，trackId:', track.id, 'title:', track.title)
-      cacheAudioFromElement(track, audio, stream, lyrics).catch((error) => {
+      cacheAudioFromElement(track, audio, stream).catch((error) => {
         console.error('[SongCache] ✗ 缓存歌曲数据失败:', error)
       })
       pendingCacheTrackRef.current = null
     }
+    } // end loadAudio
+    loadAudio()
   }, [currentStream, currentTrack?.id, setIsPlaying, setCurrentTime])
   
   // 播放/暂停控制

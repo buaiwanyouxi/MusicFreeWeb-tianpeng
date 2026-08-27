@@ -17,6 +17,9 @@ import {
   CheckCircle2,
   XCircle,
   Download,
+  Power,
+  PowerOff,
+  Settings,
 } from 'lucide-react'
 import { usePluginStore } from '../stores/pluginStore'
 
@@ -42,6 +45,12 @@ function SubscriptionsTab() {
     refreshAllSubscriptions,
     importDefaultFeeds,
     clearAllSubscriptions,
+    removePlugin,
+    updatePlugin,
+    togglePluginEnabled,
+    pluginUserVariables,
+    setUserVariable,
+    removeUserVariable,
   } = usePluginStore()
   
   const [showAddForm, setShowAddForm] = useState(false)
@@ -52,6 +61,9 @@ function SubscriptionsTab() {
   const [refreshingId, setRefreshingId] = useState<string | null>(null)
   const [refreshingAll, setRefreshingAll] = useState(false)
   const [expandedSubs, setExpandedSubs] = useState<Set<string>>(new Set())
+  const [settingsPluginId, setSettingsPluginId] = useState<string | null>(null)
+  const [newVarKey, setNewVarKey] = useState('')
+  const [newVarValue, setNewVarValue] = useState('')
   const [importing, setImporting] = useState(false)
   const [importError, setImportError] = useState<string | null>(null)
   
@@ -445,18 +457,19 @@ function SubscriptionsTab() {
                         ) : (
                           <div className="space-y-1.5">
                             {subPlugins.map((plugin) => (
+                              <div key={plugin.meta.id}>
                               <div
-                                key={plugin.meta.id}
-                                className="flex items-center gap-2 px-3 py-2 rounded-lg bg-surface-800/50"
+                                className={`flex items-center gap-2 px-3 py-2 rounded-lg ${plugin.meta.enabled ? 'bg-surface-800/50' : 'bg-surface-800/30 opacity-60'}`}
                               >
                                 <div className={`w-2 h-2 rounded-full flex-shrink-0 ${
+                                  !plugin.meta.enabled ? 'bg-surface-600' :
                                   plugin.status === 'ready' ? 'bg-green-400' :
                                   plugin.status === 'loading' ? 'bg-yellow-400 animate-pulse' :
                                   plugin.status === 'error' ? 'bg-red-400' :
                                   'bg-surface-500'
                                 }`} />
                                 
-                                <span className="text-sm text-surface-200 flex-1 truncate">
+                                <span className={`text-sm flex-1 truncate ${plugin.meta.enabled ? 'text-surface-200' : 'text-surface-500'}`}>
                                   {plugin.meta.name}
                                 </span>
                                 
@@ -467,10 +480,107 @@ function SubscriptionsTab() {
                                 )}
                                 
                                 {plugin.status === 'error' && plugin.error && (
-                                  <span className="text-xs text-red-400 truncate max-w-[120px]" title={plugin.error}>
+                                  <span className="text-xs text-red-400 truncate max-w-[80px]" title={plugin.error}>
                                     {plugin.error}
                                   </span>
                                 )}
+
+                                {/* 启用/禁用 */}
+                                <button
+                                  onClick={() => togglePluginEnabled(plugin.meta.id)}
+                                  className={`p-1 rounded transition-colors ${plugin.meta.enabled ? 'text-green-400 hover:bg-green-400/10' : 'text-surface-500 hover:bg-surface-700'}`}
+                                  title={plugin.meta.enabled ? '禁用' : '启用'}
+                                >
+                                  {plugin.meta.enabled ? <Power className="w-3.5 h-3.5" /> : <PowerOff className="w-3.5 h-3.5" />}
+                                </button>
+
+                                {/* 更新 */}
+                                <button
+                                  onClick={() => updatePlugin(plugin.meta.id)}
+                                  disabled={plugin.status === 'loading'}
+                                  className="p-1 rounded text-surface-400 hover:text-primary-400 hover:bg-primary-400/10 transition-colors disabled:opacity-50"
+                                  title="更新"
+                                >
+                                  <RefreshCw className={`w-3.5 h-3.5 ${plugin.status === 'loading' ? 'animate-spin' : ''}`} />
+                                </button>
+
+                                {/* 设置（用户变量） */}
+                                <button
+                                  onClick={() => setSettingsPluginId(settingsPluginId === plugin.meta.id ? null : plugin.meta.id)}
+                                  className={`p-1 rounded transition-colors ${settingsPluginId === plugin.meta.id ? 'text-primary-400 bg-primary-400/10' : 'text-surface-400 hover:text-primary-400 hover:bg-primary-400/10'}`}
+                                  title="用户变量"
+                                >
+                                  <Settings className="w-3.5 h-3.5" />
+                                </button>
+
+                                {/* 卸载 */}
+                                <button
+                                  onClick={() => {
+                                    if (confirm(`确定卸载「${plugin.meta.name}」？`)) {
+                                      removePlugin(plugin.meta.id)
+                                    }
+                                  }}
+                                  className="p-1 rounded text-surface-400 hover:text-red-400 hover:bg-red-400/10 transition-colors"
+                                  title="卸载"
+                                >
+                                  <Trash2 className="w-3.5 h-3.5" />
+                                </button>
+                              </div>
+
+                              {/* 用户变量编辑器 */}
+                              {settingsPluginId === plugin.meta.id && (
+                                <div className="mx-3 mb-2 p-2 rounded-lg bg-surface-900/80 border border-surface-700">
+                                  <p className="text-xs text-surface-400 mb-2">用户变量（插件可通过 env.getUserVariables() 读取）</p>
+                                  {pluginUserVariables[plugin.meta.id] && Object.keys(pluginUserVariables[plugin.meta.id]).length > 0 ? (
+                                    <div className="space-y-1 mb-2">
+                                      {Object.entries(pluginUserVariables[plugin.meta.id]).map(([key, value]) => (
+                                        <div key={key} className="flex items-center gap-2 text-xs">
+                                          <span className="text-primary-400 font-mono">{key}</span>
+                                          <span className="text-surface-500">=</span>
+                                          <span className="text-surface-300 font-mono flex-1 truncate">{value}</span>
+                                          <button
+                                            onClick={() => removeUserVariable(plugin.meta.id, key)}
+                                            className="text-surface-500 hover:text-red-400 transition-colors"
+                                          >
+                                            <X className="w-3 h-3" />
+                                          </button>
+                                        </div>
+                                      ))}
+                                    </div>
+                                  ) : (
+                                    <p className="text-xs text-surface-600 mb-2">暂无变量</p>
+                                  )}
+                                  <div className="flex items-center gap-1.5">
+                                    <input
+                                      type="text"
+                                      placeholder="key"
+                                      value={newVarKey}
+                                      onChange={(e) => setNewVarKey(e.target.value)}
+                                      className="w-20 bg-surface-800 rounded px-1.5 py-1 text-xs text-surface-200 placeholder-surface-600"
+                                    />
+                                    <input
+                                      type="text"
+                                      placeholder="value"
+                                      value={newVarValue}
+                                      onChange={(e) => setNewVarValue(e.target.value)}
+                                      className="flex-1 bg-surface-800 rounded px-1.5 py-1 text-xs text-surface-200 placeholder-surface-600"
+                                    />
+                                    <button
+                                      onClick={() => {
+                                        if (newVarKey.trim()) {
+                                          setUserVariable(plugin.meta.id, newVarKey.trim(), newVarValue)
+                                          setNewVarKey('')
+                                          setNewVarValue('')
+                                        }
+                                      }}
+                                      disabled={!newVarKey.trim()}
+                                      className="p-1 rounded text-primary-400 hover:bg-primary-400/10 transition-colors disabled:opacity-30"
+                                    >
+                                      <Check className="w-3 h-3" />
+                                    </button>
+                                  </div>
+                                </div>
+                              )}
                               </div>
                             ))}
                           </div>

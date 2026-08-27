@@ -584,6 +584,18 @@ export default defineConfig({
         rewrite: (path) => path.replace(/^\/api\/proxy\/migu_cdn/, ''),
         headers: { ...commonHeaders, referer: 'https://music.migu.cn/' },
       },
+      '/api/proxy/migu_app_u': {
+        target: 'https://app.u.nf.migu.cn',
+        changeOrigin: true,
+        rewrite: (path) => path.replace(/^\/api\/proxy\/migu_app_u/, ''),
+        headers: { ...commonHeaders, referer: 'https://music.migu.cn/' },
+      },
+      '/api/proxy/migu_app_c': {
+        target: 'https://app.c.nf.migu.cn',
+        changeOrigin: true,
+        rewrite: (path) => path.replace(/^\/api\/proxy\/migu_app_c/, ''),
+        headers: { ...commonHeaders, referer: 'https://music.migu.cn/' },
+      },
       '/api/proxy/kstore': {
         target: 'https://13413.kstore.vip',
         changeOrigin: true,

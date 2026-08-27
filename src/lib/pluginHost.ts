@@ -122,15 +122,24 @@ const fetchTextWithFallback = async (url: string, init?: RequestInit): Promise<s
       if (response.ok) {
         return await response.text()
       }
-      throw new Error(`Serverless proxy returned error: ${response.status}`)
+      console.warn('[fetchTextWithFallback] 代理返回错误:', response.status, '尝试直接请求')
     } catch (error) {
-      console.error('[fetchTextWithFallback] Serverless 代理失败:', error)
+      console.warn('[fetchTextWithFallback] 代理失败，尝试直接请求:', error)
+    }
+    // 代理失败时回退到直接请求
+    try {
+      const response = await fetch(url, init)
+      if (response.ok) {
+        return await response.text()
+      }
+      throw new Error(`Request failed: ${response.status}`)
+    } catch (error) {
+      console.error('[fetchTextWithFallback] 直接请求也失败:', error)
       throw error
     }
   }
   
-  // 如果无法重写 URL，直接请求（可能会 CORS 错误）
-  console.warn('[fetchTextWithFallback] URL 无法通过代理，直接请求（可能 CORS 错误):', url.substring(0, 60))
+  // URL 无代理规则，直接请求
   const response = await fetch(url, init)
   if (!response.ok) {
     throw new Error(`Request failed: ${response.status}`)
@@ -303,30 +312,44 @@ const buildSinglePluginDescriptor = (url: string, code?: string): PluginDescript
 }
 
 export const fetchPluginFeed = async (feedUrl: string): Promise<PluginFeed> => {
+  let rawText: string
   try {
-    const rawText = await fetchTextWithFallback(feedUrl, {
+    rawText = await fetchTextWithFallback(feedUrl, {
       cache: 'no-store',
     })
-
+  } catch (error) {
+    console.warn('[Feed] 远程获取失败，尝试本地备份:', error)
     try {
-      const json = JSON.parse(rawText) as PluginFeed
-      if (json?.plugins?.length) {
-        return { ...json, source: 'remote' }
-      }
+      return await fetchLocalFeed()
     } catch {
-      // 不是标准 JSON，继续尝试按插件脚本解析
+      throw new Error(`无法获取订阅源：${feedUrl}，请检查网络连接或 URL 是否正确`)
     }
+  }
 
+  // 尝试解析为 JSON
+  try {
+    const json = JSON.parse(rawText)
+    if (json?.plugins && Array.isArray(json.plugins) && json.plugins.length > 0) {
+      return {
+        desc: json.desc || json.name || json.title || '',
+        plugins: json.plugins,
+        source: 'remote',
+      }
+    }
+  } catch {
+    // 不是 JSON，继续尝试按插件脚本解析
+  }
+
+  // 尝试按单个插件脚本解析
+  try {
     const descriptor = buildSinglePluginDescriptor(feedUrl, rawText)
     return {
       desc: `自定义插件：${descriptor.name}`,
       plugins: [descriptor],
       source: 'remote',
     }
-  } catch (error) {
-    console.warn('plugin feed remote fetch failed, fallback to local', error)
-    const fallback = await fetchLocalFeed()
-    return fallback
+  } catch {
+    throw new Error('无法识别该订阅源格式，请确认 URL 指向有效的插件订阅 JSON 或插件脚本')
   }
 }
 
@@ -431,6 +454,8 @@ const urlRewriteRules: Array<{ pattern: RegExp; replace: string }> = [
   { pattern: /^https?:\/\/m\.music\.migu\.cn\//, replace: '/api/proxy/migu_m/' },
   { pattern: /^https?:\/\/music\.migu\.cn\//, replace: '/api/proxy/migu/' },
   { pattern: /^https?:\/\/cdnmusic\.migu\.cn\//, replace: '/api/proxy/migu_cdn/' },
+  { pattern: /^https?:\/\/app\.u\.nf\.migu\.cn\//, replace: '/api/proxy/migu_app_u/' },
+  { pattern: /^https?:\/\/app\.c\.nf\.migu\.cn\//, replace: '/api/proxy/migu_app_c/' },
   
   // ============ 插件托管 (kstore.vip) ============
   { pattern: /^https?:\/\/13413\.kstore\.vip\//, replace: '/api/proxy/kstore/' },
@@ -1446,7 +1471,14 @@ const executePluginCode = async (
   
   // 提供 env 对象（MusicFree 原版 API）
   const env = {
-    getUserVariables: () => ({}),
+    getUserVariables: () => {
+      // 从全局注册表读取用户变量
+      const getter = (globalThis as any).__musicfree_getUserVariables
+      if (typeof getter === 'function') {
+        return getter(descriptor.id) || {}
+      }
+      return {}
+    },
     os: 'h5',
     appVersion: '1.0.0',
   }
@@ -1525,9 +1557,16 @@ const executePluginCode = async (
         async resolveStream(track) {
           if (typeof exp.getMediaSource === 'function') {
             try {
-              const result = await (exp.getMediaSource as (t: unknown, q: string) => Promise<{ url: string }>)(track.extra || track, 'standard')
+              const result = await (exp.getMediaSource as (t: unknown, q: string) => Promise<any>)(track.extra || track, 'standard')
               if (result?.url) {
-                return { url: result.url }
+                const streamResult: any = { url: result.url }
+                if (result.headers) {
+                  streamResult.headers = result.headers
+                }
+                if (result.userAgent) {
+                  streamResult.headers = { ...(streamResult.headers || {}), 'User-Agent': result.userAgent }
+                }
+                return streamResult
               }
             } catch (e) {
               console.error('[Plugin] resolveStream error:', e)
@@ -1577,6 +1616,14 @@ interface MusicFreeNativePlugin {
     list?: MusicFreePlaylist[]
     isEnd?: boolean
   }>
+  importMusicSheet?: (sheetItem: any) => Promise<{
+    musicList?: MusicFreeTrack[]
+    isEnd?: boolean
+  } | MusicFreeTrack[]>
+  importVideo?: (sheetItem: any) => Promise<{
+    musicList?: MusicFreeTrack[]
+    isEnd?: boolean
+  } | MusicFreeTrack[]>
 }
 
 interface MusicFreeTrack {
@@ -1910,7 +1957,71 @@ const adaptMusicFreePlugin = (
         return { data: [], isEnd: true }
       }
     },
-    
+
+    async importMusicSheet(url: string) {
+      if (!native.importMusicSheet) {
+        throw new Error('该插件不支持导入歌单')
+      }
+      try {
+        console.log('[MusicFree Plugin] importMusicSheet URL:', url)
+        const result = await native.importMusicSheet(url)
+
+        let tracks: MusicFreeTrack[] = []
+        if (Array.isArray(result)) {
+          tracks = result
+        } else if (result?.musicList && Array.isArray(result.musicList)) {
+          tracks = result.musicList
+        }
+
+        const mappedTracks = tracks.map(mapTrack)
+        const firstTrack = mappedTracks[0]
+
+        return {
+          id: `import_${Date.now()}`,
+          title: `导入歌单 - ${new URL(url).hostname}`,
+          tracks: mappedTracks,
+          artist: firstTrack?.artists?.join(', '),
+          coverUrl: firstTrack?.coverUrl,
+          worksNum: mappedTracks.length,
+        }
+      } catch (error) {
+        console.error('[MusicFree Plugin] importMusicSheet error:', error)
+        throw error
+      }
+    },
+
+    async importVideo(url: string) {
+      if (!native.importVideo) {
+        throw new Error('该插件不支持导入视频')
+      }
+      try {
+        console.log('[MusicFree Plugin] importVideo URL:', url)
+        const result = await native.importVideo(url)
+
+        let tracks: MusicFreeTrack[] = []
+        if (Array.isArray(result)) {
+          tracks = result
+        } else if (result?.musicList && Array.isArray(result.musicList)) {
+          tracks = result.musicList
+        }
+
+        const mappedTracks = tracks.map(mapTrack)
+        const firstTrack = mappedTracks[0]
+
+        return {
+          id: `import_video_${Date.now()}`,
+          title: `导入视频 - ${new URL(url).hostname}`,
+          tracks: mappedTracks,
+          artist: firstTrack?.artists?.join(', '),
+          coverUrl: firstTrack?.coverUrl,
+          worksNum: mappedTracks.length,
+        }
+      } catch (error) {
+        console.error('[MusicFree Plugin] importVideo error:', error)
+        throw error
+      }
+    },
+
     async resolveStream(track) {
       if (track.streamUrl) {
         return { url: track.streamUrl }
@@ -1932,28 +2043,29 @@ const adaptMusicFreePlugin = (
             // 4. 直接返回 { url }
             let url: string | undefined
             let lrc: string | undefined
-            
+            let headers: Record<string, string> | undefined
+
             const resultAny = result as any
-            
+
             // 检查是否有 code 字段，如果有，说明是 { code: 200, data: {...} } 格式
             if (resultAny?.code === 200 && resultAny?.data) {
               const data = resultAny.data
               url = data.url
               lrc = data.lrc
-              console.log('[Lyrics] 格式1: { code: 200, data: { url, lrc } }')
+              headers = data.headers || data.userAgent ? { ...(data.headers || {}), ...(data.userAgent ? { 'User-Agent': data.userAgent } : {}), ...(data.cookie ? { 'Cookie': data.cookie } : {}) } : undefined
             }
             // 检查是否有 data 字段（但没有 code）
             else if (resultAny?.data && !resultAny?.code) {
               const data = resultAny.data
               url = data.url
               lrc = data.lrc
-              console.log('[Lyrics] 格式2: { data: { url, lrc } }')
+              headers = data.headers || data.userAgent ? { ...(data.headers || {}), ...(data.userAgent ? { 'User-Agent': data.userAgent } : {}), ...(data.cookie ? { 'Cookie': data.cookie } : {}) } : undefined
             }
             // 直接包含 url 和 lrc
             else {
               url = resultAny?.url || result?.url
               lrc = resultAny?.lrc
-              console.log('[Lyrics] 格式3: { url, lrc } 或 { url }')
+              headers = resultAny?.headers || resultAny?.userAgent ? { ...(resultAny.headers || {}), ...(resultAny.userAgent ? { 'User-Agent': resultAny.userAgent } : {}), ...(resultAny.cookie ? { 'Cookie': resultAny.cookie } : {}) } : undefined
             }
             
             // 如果从返回数据中没有找到歌词，尝试从缓存中获取
@@ -1974,21 +2086,14 @@ const adaptMusicFreePlugin = (
             console.log('[Lyrics] 提取结果 - url:', url ? '存在' : '不存在', 'lrc:', lrc ? `存在(${lrc.length}字符)` : '不存在')
             
             if (url) {
-              // 如果返回的数据中包含 lrc，将其作为额外数据返回
-              if (lrc && typeof lrc === 'string' && lrc.trim().length > 0) {
-                console.log('[Lyrics] ✓ 找到歌词，长度:', lrc.length)
-                console.log('[Lyrics] 歌词预览:', lrc.substring(0, 200))
-                return { 
-                  url: url,
-                  extra: { lrc: lrc },
-                } as any
-              } else {
-                console.log('[Lyrics] ✗ 未找到有效歌词数据')
-                if (lrc) {
-                  console.log('[Lyrics] lrc 类型:', typeof lrc, '长度:', lrc.length)
-                }
+              const streamResult: any = { url }
+              if (headers && Object.keys(headers).length > 0) {
+                streamResult.headers = headers
               }
-              return { url: url }
+              if (lrc && typeof lrc === 'string' && lrc.trim().length > 0) {
+                streamResult.extra = { lrc }
+              }
+              return streamResult
             }
           } catch {
             continue
