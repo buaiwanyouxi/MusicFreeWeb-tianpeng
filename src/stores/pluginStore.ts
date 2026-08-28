@@ -469,7 +469,7 @@ export interface PluginStoreState {
   
   // 导入歌单/视频
   importedSheets: ImportedSheet[]
-  importMusicSheet: (pluginId: string, url: string) => Promise<void>
+  importMusicSheet: (pluginId: string, url: string) => Promise<ImportedSheet>
   importVideo: (pluginId: string, url: string) => Promise<void>
   removeImportedSheet: (sheetId: string) => void
 
@@ -1985,6 +1985,7 @@ export const usePluginStore = create<PluginStoreState>((set, get) => ({
     const sheets = [sheet, ...get().importedSheets]
     set({ importedSheets: sheets })
     saveImportedSheets(sheets)
+    return sheet
   },
 
   importVideo: async (pluginId: string, url: string) => {

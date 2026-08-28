@@ -1,6 +1,6 @@
 import { useEffect, useState, useRef, useCallback } from 'react'
 import { motion, AnimatePresence } from 'framer-motion'
-import { Music2, ListMusic, Search, Radio, ChevronDown, RefreshCw, Settings, Rss, Palette, Clock, Info, Menu, X } from 'lucide-react'
+import { Music2, ListMusic, Search, Radio, ChevronDown, RefreshCw, Settings, Rss, Menu, X } from 'lucide-react'
 import { usePluginStore } from './stores/pluginStore'
 import { usePlayerStore } from './stores/playerStore'
 import { parseLRC, getCurrentLyric } from './lib/lyrics'
@@ -30,7 +30,7 @@ function App() {
   const [activeTab, setActiveTab] = useState<TabId>('search')
   const [showPlayer, setShowPlayer] = useState(false)
   const [showPluginSelect, setShowPluginSelect] = useState(false)
-  const [settingsSubTab, setSettingsSubTab] = useState<'basic' | 'other' | 'about'>('basic')
+  const [settingsSubTab] = useState<'basic' | 'other' | 'about'>('basic')
   const [sidebarOpen, setSidebarOpen] = useState(false)
   const [sidebarCollapsed, setSidebarCollapsed] = useState(false)
   const audioRef = useRef<HTMLAudioElement>(null)
