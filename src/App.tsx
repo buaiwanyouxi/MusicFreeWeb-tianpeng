@@ -1,6 +1,6 @@
 import { useEffect, useState, useRef, useCallback } from 'react'
 import { motion, AnimatePresence } from 'framer-motion'
-import { Music2, ListMusic, Search, Radio, ChevronDown, RefreshCw, Settings, Rss, Palette, Clock, Info } from 'lucide-react'
+import { Music2, ListMusic, Search, Radio, ChevronDown, RefreshCw, Settings, Rss, Palette, Clock, Info, Menu, X } from 'lucide-react'
 import { usePluginStore } from './stores/pluginStore'
 import { usePlayerStore } from './stores/playerStore'
 import { parseLRC, getCurrentLyric } from './lib/lyrics'
@@ -32,6 +32,7 @@ function App() {
   const [showPluginSelect, setShowPluginSelect] = useState(false)
   const [settingsExpanded, setSettingsExpanded] = useState(false)
   const [settingsSubTab, setSettingsSubTab] = useState<'basic' | 'other' | 'about'>('basic')
+  const [sidebarOpen, setSidebarOpen] = useState(false)
   const audioRef = useRef<HTMLAudioElement>(null)
   const hasRestoredProgressRef = useRef(false)
   const currentAudioUrlRef = useRef<string>('')
@@ -1227,20 +1228,31 @@ function App() {
       </div>
       
       {/* 头部 */}
-      <header className="relative z-50 px-4 py-3 sm:px-6 sm:py-4 flex-shrink-0 lg:hidden">
+      <header className="relative z-50 px-4 py-3 sm:px-6 sm:py-4 flex-shrink-0">
         <div className="flex items-center justify-between max-w-2xl mx-auto w-full">
-          <motion.div 
-            className="flex items-center gap-2.5"
-            initial={{ opacity: 0, x: -20 }}
-            animate={{ opacity: 1, x: 0 }}
-          >
-            <div className="w-9 h-9 rounded-xl bg-gradient-to-br from-primary-400 to-primary-600 flex items-center justify-center shadow-lg shadow-primary-500/30">
-              <Music2 className="w-5 h-5 text-surface-950" />
-            </div>
-            <h1 className="font-display font-semibold text-lg text-surface-100">
-              MusicFree<span className="text-primary-400">H5</span>
-            </h1>
-          </motion.div>
+          <div className="flex items-center gap-3">
+            {/* 汉堡菜单按钮 - 全平台显示 */}
+            <button
+              type="button"
+              onClick={() => setSidebarOpen(!sidebarOpen)}
+              className="glass rounded-xl p-2 flex items-center justify-center hover:bg-surface-700/50 transition-colors"
+              title={sidebarOpen ? '关闭菜单' : '打开菜单'}
+            >
+              {sidebarOpen ? <X className="w-5 h-5 text-surface-400" /> : <Menu className="w-5 h-5 text-surface-400" />}
+            </button>
+            <motion.div
+              className="flex items-center gap-2.5"
+              initial={{ opacity: 0, x: -20 }}
+              animate={{ opacity: 1, x: 0 }}
+            >
+              <div className="w-9 h-9 rounded-xl bg-gradient-to-br from-primary-400 to-primary-600 flex items-center justify-center shadow-lg shadow-primary-500/30">
+                <Music2 className="w-5 h-5 text-surface-950" />
+              </div>
+              <h1 className="font-display font-semibold text-lg text-surface-100">
+                MusicFree<span className="text-primary-400">Web</span>
+              </h1>
+            </motion.div>
+          </div>
           
           <motion.div
             className="relative z-50 flex items-center gap-2"
@@ -1313,16 +1325,40 @@ function App() {
         </div>
       </header>
       
-      {/* 桌面端侧边栏导航 */}
-      <aside className="hidden lg:flex fixed left-0 top-0 bottom-0 z-20 w-[220px] flex-col border-r border-surface-800 bg-surface-950/95 backdrop-blur-xl">
+      {/* 移动端遮罩层 */}
+      <AnimatePresence>
+        {sidebarOpen && (
+          <motion.div
+            initial={{ opacity: 0 }}
+            animate={{ opacity: 1 }}
+            exit={{ opacity: 0 }}
+            transition={{ duration: 0.2 }}
+            className="fixed inset-0 z-30 bg-black/50 backdrop-blur-sm lg:hidden"
+            onClick={() => setSidebarOpen(false)}
+          />
+        )}
+      </AnimatePresence>
+
+      {/* 侧边栏导航 - 全平台，移动端可折叠 */}
+      <aside className={`fixed left-0 top-0 bottom-0 z-40 w-[220px] flex-col border-r border-surface-800 bg-surface-950/95 backdrop-blur-xl transition-transform duration-300 ease-in-out flex
+        ${sidebarOpen ? 'translate-x-0' : '-translate-x-full lg:translate-x-0'}
+      `}>
         <div className="flex items-center gap-3 px-5 py-5 border-b border-surface-800">
           <div className="w-9 h-9 rounded-xl bg-primary-500/20 flex items-center justify-center">
             <Music2 className="w-5 h-5 text-primary-400" />
           </div>
-          <div>
+          <div className="flex-1">
             <h1 className="text-sm font-bold text-surface-100">MusicFreeWeb</h1>
             <p className="text-[10px] text-surface-500">插件化音乐播放器</p>
           </div>
+          {/* 移动端关闭按钮 */}
+          <button
+            type="button"
+            onClick={() => setSidebarOpen(false)}
+            className="lg:hidden p-1.5 rounded-lg hover:bg-surface-800 transition-colors"
+          >
+            <X className="w-5 h-5 text-surface-400" />
+          </button>
         </div>
         <nav className="flex-1 px-3 py-4 space-y-1 overflow-y-auto">
           {tabs.filter(t => t.id !== 'settings').map((tab) => {
@@ -1330,7 +1366,7 @@ function App() {
             return (
               <button
                 key={tab.id}
-                onClick={() => { setActiveTab(tab.id); setSettingsExpanded(false) }}
+                onClick={() => { setActiveTab(tab.id); setSettingsExpanded(false); setSidebarOpen(false) }}
                 className={`w-full flex items-center gap-3 px-4 py-3 rounded-xl text-sm font-medium transition-all duration-200 ${
                   isActive
                     ? 'bg-primary-500/15 text-primary-400'
@@ -1351,6 +1387,7 @@ function App() {
                 setSettingsExpanded(willExpand)
                 if (willExpand) {
                   setActiveTab('settings')
+                  setSidebarOpen(false)
                 }
               }}
               className={`w-full flex items-center gap-3 px-4 py-3 rounded-xl text-sm font-medium transition-all duration-200 ${
@@ -1379,7 +1416,7 @@ function App() {
                   ]).map((sub) => (
                     <button
                       key={sub.id}
-                      onClick={() => { setActiveTab('settings'); setSettingsSubTab(sub.id) }}
+                      onClick={() => { setActiveTab('settings'); setSettingsSubTab(sub.id); setSidebarOpen(false) }}
                       className={`w-full flex items-center gap-2 px-3 py-2 rounded-lg text-xs font-medium transition-colors ${
                         settingsSubTab === sub.id && activeTab === 'settings'
                           ? 'text-primary-400 bg-primary-500/10'
@@ -1446,7 +1483,7 @@ function App() {
       </aside>
 
       {/* 主内容区 */}
-      <main className="flex-1 relative z-10 overflow-hidden pb-[65px] lg:pb-0 lg:ml-[220px]">
+      <main className="flex-1 relative z-10 overflow-hidden lg:ml-[220px]">
         <div className="h-full relative">
           <div
             className={`absolute inset-0 h-full overflow-hidden transition-opacity duration-200 ${
@@ -1486,31 +1523,6 @@ function App() {
         )}
       </AnimatePresence>
 
-      {/* 底部导航 - 仅移动端显示 */}
-      <nav className="fixed bottom-0 left-0 right-0 z-30 px-4 pb-safe bg-gradient-to-t from-surface-950 via-surface-950/95 to-transparent pt-3.5 lg:hidden">
-        <div className="glass rounded-2xl p-1.5 max-w-2xl mx-auto w-full mb-2">
-          <div className="flex">
-            {tabs.map((tab) => {
-              const isActive = activeTab === tab.id
-              return (
-                <button
-                  key={tab.id}
-                  onClick={() => setActiveTab(tab.id)}
-                  className={`flex-1 flex flex-row items-center justify-center gap-2 py-2.5 px-3 rounded-xl transition-all duration-200 min-h-[44px] ${
-                    isActive
-                      ? 'bg-primary-500/20 text-primary-400'
-                      : 'text-surface-400 hover:text-surface-200'
-                  }`}
-                >
-                  <tab.icon className={`w-5 h-5 flex-shrink-0 ${isActive ? 'drop-shadow-[0_0_8px_rgba(237,116,30,0.5)]' : ''}`} />
-                  <span className="text-xs font-medium">{tab.label}</span>
-                </button>
-              )
-            })}
-          </div>
-        </div>
-      </nav>
-      
       {/* 全屏播放器 */}
       <AnimatePresence>
         {showPlayer && (
