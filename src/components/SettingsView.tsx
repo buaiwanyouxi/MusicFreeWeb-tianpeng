@@ -16,7 +16,12 @@ import {
   Palette,
   Music2,
   Pipette,
+  Cloud,
+  CloudUpload,
+  CloudDownload,
 } from 'lucide-react'
+import { startTimer, clearTimer } from '../lib/sleepTimer'
+import { usePlayerStore } from '../stores/playerStore'
 
 type ThemeMode = 'light' | 'dark' | 'system'
 type FontSize = 'small' | 'medium' | 'large'
@@ -309,10 +314,38 @@ function OtherSettings() {
   const [language, setLanguage] = useState<Language>(() => {
     return (localStorage.getItem('musicfree.language') as Language) || 'zh-CN'
   })
+  
+  // WebDAV配置状态
+  const [webdavUrl, setWebdavUrl] = useState<string>(() => {
+    return localStorage.getItem('musicfree.webdav.url') || ''
+  })
+  const [webdavUser, setWebdavUser] = useState<string>(() => {
+    return localStorage.getItem('musicfree.webdav.user') || ''
+  })
+  const [webdavPass, setWebdavPass] = useState<string>(() => {
+    return localStorage.getItem('musicfree.webdav.pass') || ''
+  })
+  const [webdavLoading, setWebdavLoading] = useState<boolean>(false)
 
   const applyTimer = (value: TimerOption) => {
     setTimer(value)
     localStorage.setItem('musicfree.timer', value)
+    
+    // 实际启动或清除定时器
+    if (value === 'off') {
+      clearTimer()
+    } else {
+      const minutes = value === 'custom' 
+        ? parseInt(customMinutes || '45', 10)
+        : parseInt(value, 10)
+      
+      if (minutes > 0) {
+        startTimer(minutes, () => {
+          // 定时器到期回调：暂停播放
+          usePlayerStore.getState().setIsPlaying(false)
+        })
+      }
+    }
   }
 
   const applyLanguage = (lang: Language) => {
@@ -382,18 +415,142 @@ function OtherSettings() {
     e.target.value = ''
   }
 
+  // WebDAV备份功能
+  const handleWebdavUpload = async () => {
+    if (!webdavUrl) {
+      alert('请填写WebDAV地址')
+      return
+    }
+    
+    setWebdavLoading(true)
+    try {
+      const config = {
+        version: APP_VERSION,
+        exportedAt: new Date().toISOString(),
+        theme: localStorage.getItem('musicfree.theme'),
+        fontSize: localStorage.getItem('musicfree.fontSize'),
+        fontFamily: localStorage.getItem('musicfree.fontFamily'),
+        accentColor: localStorage.getItem('musicfree.accentColor'),
+        language: localStorage.getItem('musicfree.language'),
+        subscriptions: localStorage.getItem('musicfree.subscriptions'),
+        plugins: localStorage.getItem('musicfree.plugins.cache'),
+        activePlugin: localStorage.getItem('musicfree.active.plugin'),
+        userVariables: localStorage.getItem('musicfree.userVariables'),
+        importedSheets: localStorage.getItem('musicfree.importedSheets'),
+      }
+      
+      const headers: Record<string, string> = {
+        'Content-Type': 'application/json',
+      }
+      
+      // 如果有用户名和密码，添加Basic认证
+      if (webdavUser && webdavPass) {
+        headers['Authorization'] = 'Basic ' + btoa(`${webdavUser}:${webdavPass}`)
+      }
+      
+      // 处理URL：如果以/结尾，添加文件名
+      let uploadUrl = webdavUrl.trim()
+      if (uploadUrl.endsWith('/')) {
+        uploadUrl += 'musicfree-backup.json'
+      } else if (!uploadUrl.toLowerCase().endsWith('.json')) {
+        uploadUrl += '/musicfree-backup.json'
+      }
+      
+      const response = await fetch(uploadUrl, {
+        method: 'PUT',
+        headers,
+        body: JSON.stringify(config, null, 2),
+      })
+      
+      if (!response.ok) {
+        throw new Error(`HTTP ${response.status}: ${response.statusText}`)
+      }
+      
+      alert('配置已备份到WebDAV')
+    } catch (error) {
+      const errorMsg = error instanceof Error ? error.message : String(error)
+      if (errorMsg.includes('Failed to fetch')) {
+        alert('WebDAV备份失败：网络连接失败或CORS限制\n\n可能原因：\n1. WebDAV服务器不支持跨域访问\n2. 网络无法访问该地址\n3. 请检查WebDAV地址是否正确')
+      } else {
+        alert(`WebDAV备份失败：${errorMsg}`)
+      }
+    } finally {
+      setWebdavLoading(false)
+    }
+  }
+
+  // WebDAV恢复功能
+  const handleWebdavDownload = async () => {
+    if (!webdavUrl) {
+      alert('请填写WebDAV地址')
+      return
+    }
+    
+    setWebdavLoading(true)
+    try {
+      const headers: Record<string, string> = {}
+      
+      // 如果有用户名和密码，添加Basic认证
+      if (webdavUser && webdavPass) {
+        headers['Authorization'] = 'Basic ' + btoa(`${webdavUser}:${webdavPass}`)
+      }
+      
+      const response = await fetch(webdavUrl, {
+        method: 'GET',
+        headers,
+      })
+      
+      if (!response.ok) {
+        throw new Error(`HTTP ${response.status}: ${response.statusText}`)
+      }
+      
+      const config = await response.json()
+      if (!config.version) {
+        alert('无效的配置文件')
+        return
+      }
+      
+      const mappings: Record<string, string> = {
+        theme: 'musicfree.theme',
+        fontSize: 'musicfree.fontSize',
+        fontFamily: 'musicfree.fontFamily',
+        accentColor: 'musicfree.accentColor',
+        language: 'musicfree.language',
+        subscriptions: 'musicfree.subscriptions',
+        plugins: 'musicfree.plugins.cache',
+        activePlugin: 'musicfree.active.plugin',
+        userVariables: 'musicfree.userVariables',
+        importedSheets: 'musicfree.importedSheets',
+      }
+      
+      for (const [key, storageKey] of Object.entries(mappings)) {
+        if (config[key] !== undefined && config[key] !== null) {
+          localStorage.setItem(storageKey, config[key])
+        }
+      }
+      
+      alert('配置已从WebDAV恢复，页面将刷新')
+      window.location.reload()
+    } catch (error) {
+      alert(`WebDAV恢复失败：${error instanceof Error ? error.message : String(error)}`)
+    } finally {
+      setWebdavLoading(false)
+    }
+  }
+
   return (
     <motion.div initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }} className="px-4 pb-6">
       <div className="max-w-2xl mx-auto w-full space-y-4">
         {/* 定时关闭 */}
         <div className="glass rounded-xl p-4">
           <SettingLabel>定时关闭</SettingLabel>
-          <div className="grid grid-cols-4 gap-2">
+          <div className="grid grid-cols-5 gap-2">
             {([
               { value: 'off', label: '关闭' },
               { value: '15', label: '15分钟' },
               { value: '30', label: '30分钟' },
               { value: '60', label: '60分钟' },
+              { value: 'custom', label: '自定义' },
             ] as const).map((opt) => (
               <button
                 key={opt.value}
@@ -414,16 +571,45 @@ function OtherSettings() {
                 type="number"
                 value={customMinutes}
                 onChange={(e) => {
-                  setCustomMinutes(e.target.value)
-                  localStorage.setItem('musicfree.timer.custom', e.target.value)
+                  const value = e.target.value
+                  setCustomMinutes(value)
+                  localStorage.setItem('musicfree.timer.custom', value)
+                  // 实时更新定时器
+                  const minutes = parseInt(value, 10)
+                  if (minutes > 0) {
+                    startTimer(minutes, () => {
+                      usePlayerStore.getState().setIsPlaying(false)
+                    })
+                  }
                 }}
                 className="w-20 bg-surface-800 rounded-lg py-2 px-3 text-sm text-surface-100"
                 min="1"
                 max="480"
               />
-              <span className="text-xs text-surface-500">分钟</span>
+              <span className="text-xs text-surface-500">分钟（输入后自动应用）</span>
             </div>
           )}
+        </div>
+
+        {/* 播放设置 */}
+        <div className="glass rounded-xl p-4">
+          <SettingLabel>播放设置</SettingLabel>
+          <div className="space-y-3">
+            <label className="flex items-center justify-between cursor-pointer">
+              <div className="flex-1">
+                <p className="text-sm text-surface-200">边放边下</p>
+                <p className="text-xs text-surface-500 mt-0.5">播放时自动缓存歌曲，下次播放更快</p>
+              </div>
+              <input
+                type="checkbox"
+                checked={localStorage.getItem('musicfree.downloadWhilePlaying') === 'true'}
+                onChange={(e) => {
+                  localStorage.setItem('musicfree.downloadWhilePlaying', e.target.checked ? 'true' : 'false')
+                }}
+                className="w-10 h-5 rounded-full bg-surface-700 appearance-none relative cursor-pointer transition-colors checked:bg-primary-500"
+              />
+            </label>
+          </div>
         </div>
 
         {/* 语言 */}
@@ -453,7 +639,7 @@ function OtherSettings() {
         {/* 备份与恢复 */}
         <div className="glass rounded-xl p-4">
           <SettingLabel>备份与恢复</SettingLabel>
-          <div className="flex gap-2">
+          <div className="flex gap-2 mb-4">
             <button
               onClick={handleExport}
               className="flex-1 flex items-center justify-center gap-2 p-2.5 rounded-lg bg-surface-800 text-surface-300 text-sm hover:bg-surface-700 transition-colors"
@@ -466,6 +652,70 @@ function OtherSettings() {
               <span>导入配置</span>
               <input type="file" accept=".json" className="hidden" onChange={handleImport} />
             </label>
+          </div>
+          
+          {/* WebDAV配置 */}
+          <div className="border-t border-surface-700 pt-4 mt-4">
+            <div className="flex items-center gap-2 mb-3">
+              <Cloud className="w-4 h-4 text-primary-400" />
+              <span className="text-sm text-surface-200">WebDAV 云备份</span>
+            </div>
+            
+            <div className="space-y-2 mb-3">
+              <input
+                type="text"
+                value={webdavUrl}
+                onChange={(e) => {
+                  setWebdavUrl(e.target.value)
+                  localStorage.setItem('musicfree.webdav.url', e.target.value)
+                }}
+                placeholder="WebDAV地址（如：https://dav.example.com/backup.json）"
+                className="w-full bg-surface-800 rounded-lg py-2 px-3 text-sm text-surface-100 placeholder-surface-500"
+              />
+              <input
+                type="text"
+                value={webdavUser}
+                onChange={(e) => {
+                  setWebdavUser(e.target.value)
+                  localStorage.setItem('musicfree.webdav.user', e.target.value)
+                }}
+                placeholder="用户名（可选）"
+                className="w-full bg-surface-800 rounded-lg py-2 px-3 text-sm text-surface-100 placeholder-surface-500"
+              />
+              <input
+                type="password"
+                value={webdavPass}
+                onChange={(e) => {
+                  setWebdavPass(e.target.value)
+                  localStorage.setItem('musicfree.webdav.pass', e.target.value)
+                }}
+                placeholder="密码（可选）"
+                className="w-full bg-surface-800 rounded-lg py-2 px-3 text-sm text-surface-100 placeholder-surface-500"
+              />
+            </div>
+            
+            <div className="flex gap-2">
+              <button
+                onClick={handleWebdavUpload}
+                disabled={webdavLoading}
+                className="flex-1 flex items-center justify-center gap-2 p-2.5 rounded-lg bg-surface-800 text-surface-300 text-sm hover:bg-surface-700 transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
+              >
+                <CloudUpload className="w-4 h-4" />
+                <span>{webdavLoading ? '备份中...' : 'WebDAV备份'}</span>
+              </button>
+              <button
+                onClick={handleWebdavDownload}
+                disabled={webdavLoading}
+                className="flex-1 flex items-center justify-center gap-2 p-2.5 rounded-lg bg-surface-800 text-surface-300 text-sm hover:bg-surface-700 transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
+              >
+                <CloudDownload className="w-4 h-4" />
+                <span>{webdavLoading ? '恢复中...' : 'WebDAV恢复'}</span>
+              </button>
+            </div>
+            
+            <p className="text-xs text-surface-500 mt-2">
+              配置信息已保存到本地，刷新页面不会丢失
+            </p>
           </div>
         </div>
       </div>

@@ -2192,20 +2192,65 @@ const loadPluginCodeCache = (): PluginCodeCache => {
 
 const savePluginCodeCache = (cache: PluginCodeCache) => {
   try {
-    localStorage.setItem(PLUGIN_CODE_CACHE_KEY, JSON.stringify(cache))
+    const data = JSON.stringify(cache)
+    // 检查大小（限制在 4MB 以内，为其他数据留空间）
+    if (data.length > 4 * 1024 * 1024) {
+      console.warn('[Cache] 插件代码缓存过大，清理旧缓存')
+      // 按时间戳排序，保留最近的 5 个插件
+      const entries = Object.entries(cache)
+        .sort((a, b) => b[1].timestamp - a[1].timestamp)
+        .slice(0, 5)
+      const reducedCache: PluginCodeCache = {}
+      for (const [key, value] of entries) {
+        reducedCache[key] = value
+      }
+      localStorage.setItem(PLUGIN_CODE_CACHE_KEY, JSON.stringify(reducedCache))
+    } else {
+      localStorage.setItem(PLUGIN_CODE_CACHE_KEY, data)
+    }
   } catch (e) {
     console.warn('[Cache] 保存插件代码缓存失败:', e)
+    // 如果是配额超限，尝试清理旧缓存
+    if (e instanceof DOMException && e.name === 'QuotaExceededError') {
+      try {
+        const entries = Object.entries(cache)
+          .sort((a, b) => b[1].timestamp - a[1].timestamp)
+          .slice(0, 3)
+        const reducedCache: PluginCodeCache = {}
+        for (const [key, value] of entries) {
+          reducedCache[key] = value
+        }
+        localStorage.setItem(PLUGIN_CODE_CACHE_KEY, JSON.stringify(reducedCache))
+      } catch (retryError) {
+        console.error('[Cache] 清理缓存后仍然失败:', retryError)
+      }
+    }
   }
 }
 
 const getCachedPluginCode = (pluginId: string, url: string, version?: string): string | null => {
   const cache = loadPluginCodeCache()
   const cached = cache[pluginId]
+  
+  console.log('[Cache] 检查插件代码缓存:', {
+    pluginId,
+    url,
+    hasCache: !!cached,
+    cachedUrl: cached?.url,
+    cachedVersion: cached?.version,
+  })
+  
   if (!cached) return null
   
   // 如果 URL 或版本变了，缓存失效
-  if (cached.url !== url) return null
-  if (version && cached.version && cached.version !== version) return null
+  if (cached.url !== url) {
+    console.log('[Cache] URL不匹配，缓存失效:', { cachedUrl: cached.url, expectedUrl: url })
+    return null
+  }
+  if (version && cached.version && cached.version !== version) {
+    console.log('[Cache] 版本不匹配，缓存失效:', { cachedVersion: cached.version, expectedVersion: version })
+    return null
+  }
   
   console.log('[Cache] 使用缓存的插件代码:', pluginId)
   return cached.code

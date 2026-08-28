@@ -20,8 +20,10 @@ import {
   Power,
   PowerOff,
   Settings,
+  ListMusic,
 } from 'lucide-react'
 import { usePluginStore } from '../stores/pluginStore'
+import { usePlayerStore } from '../stores/playerStore'
 
 export function PluginManager() {
   return (
@@ -66,6 +68,39 @@ function SubscriptionsTab() {
   const [newVarValue, setNewVarValue] = useState('')
   const [importing, setImporting] = useState(false)
   const [importError, setImportError] = useState<string | null>(null)
+  
+  // 导入歌单相关状态
+  const [importSheetPluginId, setImportSheetPluginId] = useState<string | null>(null)
+  const [sheetUrl, setSheetUrl] = useState('')
+  const [importingSheet, setImportingSheet] = useState(false)
+  const [sheetImportError, setSheetImportError] = useState<string | null>(null)
+  
+  const { importMusicSheet } = usePluginStore()
+  const { setPlaylist, setIsPlaying } = usePlayerStore()
+  
+  // 导入歌单
+  const handleImportSheet = async () => {
+    if (!importSheetPluginId || !sheetUrl.trim()) return
+    
+    setImportingSheet(true)
+    setSheetImportError(null)
+    
+    try {
+      const result = await importMusicSheet(importSheetPluginId, sheetUrl.trim())
+      if (result && result.tracks && result.tracks.length > 0) {
+        setPlaylist(result.tracks, result.title || '导入的歌单')
+        setIsPlaying(false)
+        setImportSheetPluginId(null)
+        setSheetUrl('')
+      } else {
+        setSheetImportError('歌单为空或导入失败')
+      }
+    } catch (error) {
+      setSheetImportError(error instanceof Error ? error.message : '导入失败')
+    } finally {
+      setImportingSheet(false)
+    }
+  }
   
   // 获取订阅源下的插件
   const getPluginsForSubscription = (subscriptionId: string) => {
@@ -530,6 +565,17 @@ function SubscriptionsTab() {
                                   <RefreshCw className={`w-3.5 h-3.5 ${plugin.status === 'loading' ? 'animate-spin' : ''}`} />
                                 </button>
 
+                                {/* 导入歌单 */}
+                                {plugin.status === 'ready' && plugin.instance?.capabilities?.includes('importSheet') && (
+                                  <button
+                                    onClick={() => setImportSheetPluginId(importSheetPluginId === plugin.meta.id ? null : plugin.meta.id)}
+                                    className={`p-1 rounded transition-colors ${importSheetPluginId === plugin.meta.id ? 'text-blue-400 bg-blue-400/10' : 'text-surface-400 hover:text-blue-400 hover:bg-blue-400/10'}`}
+                                    title="导入歌单"
+                                  >
+                                    <ListMusic className="w-3.5 h-3.5" />
+                                  </button>
+                                )}
+
                                 {/* 设置（用户变量） */}
                                 <button
                                   onClick={() => setSettingsPluginId(settingsPluginId === plugin.meta.id ? null : plugin.meta.id)}
@@ -603,6 +649,46 @@ function SubscriptionsTab() {
                                       className="p-1 rounded text-primary-400 hover:bg-primary-400/10 transition-colors disabled:opacity-30"
                                     >
                                       <Check className="w-3 h-3" />
+                                    </button>
+                                  </div>
+                                </div>
+                              )}
+                              
+                              {/* 导入歌单对话框 */}
+                              {importSheetPluginId === plugin.meta.id && (
+                                <div className="mx-3 mb-2 p-3 rounded-lg bg-surface-900/80 border border-blue-500/30">
+                                  <p className="text-xs text-surface-300 mb-2">输入歌单链接（支持QQ音乐、网易云音乐等）</p>
+                                  <input
+                                    type="text"
+                                    placeholder="https://y.qq.com/..."
+                                    value={sheetUrl}
+                                    onChange={(e) => setSheetUrl(e.target.value)}
+                                    className="w-full bg-surface-800 rounded px-3 py-2 text-xs text-surface-200 placeholder-surface-600 mb-2"
+                                  />
+                                  {sheetImportError && (
+                                    <p className="text-xs text-red-400 mb-2">{sheetImportError}</p>
+                                  )}
+                                  <div className="flex items-center gap-2">
+                                    <button
+                                      onClick={handleImportSheet}
+                                      disabled={importingSheet || !sheetUrl.trim()}
+                                      className="flex items-center gap-1.5 px-3 py-1.5 rounded bg-blue-500/20 text-blue-400 text-xs hover:bg-blue-500/30 transition-colors disabled:opacity-50"
+                                    >
+                                      {importingSheet ? (
+                                        <><Loader2 className="w-3 h-3 animate-spin" />导入中...</>
+                                      ) : (
+                                        <><Download className="w-3 h-3" />导入并播放</>
+                                      )}
+                                    </button>
+                                    <button
+                                      onClick={() => {
+                                        setImportSheetPluginId(null)
+                                        setSheetUrl('')
+                                        setSheetImportError(null)
+                                      }}
+                                      className="px-3 py-1.5 rounded text-surface-400 text-xs hover:bg-surface-800 transition-colors"
+                                    >
+                                      取消
                                     </button>
                                   </div>
                                 </div>

@@ -30,9 +30,9 @@ function App() {
   const [activeTab, setActiveTab] = useState<TabId>('search')
   const [showPlayer, setShowPlayer] = useState(false)
   const [showPluginSelect, setShowPluginSelect] = useState(false)
-  const [settingsExpanded, setSettingsExpanded] = useState(false)
   const [settingsSubTab, setSettingsSubTab] = useState<'basic' | 'other' | 'about'>('basic')
   const [sidebarOpen, setSidebarOpen] = useState(false)
+  const [sidebarCollapsed, setSidebarCollapsed] = useState(false)
   const audioRef = useRef<HTMLAudioElement>(null)
   const hasRestoredProgressRef = useRef(false)
   const currentAudioUrlRef = useRef<string>('')
@@ -1339,18 +1339,32 @@ function App() {
         )}
       </AnimatePresence>
 
-      {/* 侧边栏导航 - 全平台，移动端可折叠 */}
-      <aside className={`fixed left-0 top-0 bottom-0 z-40 w-[220px] flex-col border-r border-surface-800 bg-surface-950/95 backdrop-blur-xl transition-transform duration-300 ease-in-out flex
-        ${sidebarOpen ? 'translate-x-0' : '-translate-x-full lg:translate-x-0'}
+      {/* 侧边栏导航 - 移动端悬浮，桌面端可折叠 */}
+      <aside className={`fixed left-0 top-0 bottom-0 z-50 flex-col border-r border-surface-800 bg-surface-950 backdrop-blur-xl transition-all duration-300 ease-in-out flex shadow-2xl
+        ${sidebarOpen ? 'translate-x-0' : '-translate-x-full'}
+        lg:translate-x-0
+        ${sidebarCollapsed ? 'lg:w-[70px]' : 'lg:w-[220px]'}
+        w-[220px]
       `}>
-        <div className="flex items-center gap-3 px-5 py-5 border-b border-surface-800">
-          <div className="w-9 h-9 rounded-xl bg-primary-500/20 flex items-center justify-center">
+        <div className="flex items-center gap-3 px-4 py-4 border-b border-surface-800">
+          <div className="w-9 h-9 rounded-xl bg-primary-500/20 flex items-center justify-center flex-shrink-0">
             <Music2 className="w-5 h-5 text-primary-400" />
           </div>
-          <div className="flex-1">
-            <h1 className="text-sm font-bold text-surface-100">MusicFreeWeb</h1>
-            <p className="text-[10px] text-surface-500">插件化音乐播放器</p>
-          </div>
+          {!sidebarCollapsed && (
+            <div className="flex-1 min-w-0">
+              <h1 className="text-sm font-bold text-surface-100 truncate">MusicFreeWeb</h1>
+              <p className="text-[10px] text-surface-500 truncate">插件化音乐播放器</p>
+            </div>
+          )}
+          {/* 折叠/展开按钮 - 仅桌面端显示 */}
+          <button
+            type="button"
+            onClick={() => setSidebarCollapsed(!sidebarCollapsed)}
+            className="hidden lg:flex p-1.5 rounded-lg hover:bg-surface-800 transition-colors"
+            title={sidebarCollapsed ? '展开侧边栏' : '折叠侧边栏'}
+          >
+            {sidebarCollapsed ? <Menu className="w-4 h-4 text-surface-400" /> : <X className="w-4 h-4 text-surface-400" />}
+          </button>
           {/* 移动端关闭按钮 */}
           <button
             type="button"
@@ -1361,76 +1375,26 @@ function App() {
           </button>
         </div>
         <nav className="flex-1 px-3 py-4 space-y-1 overflow-y-auto">
-          {tabs.filter(t => t.id !== 'settings').map((tab) => {
+          {tabs.map((tab) => {
             const isActive = activeTab === tab.id
             return (
               <button
                 key={tab.id}
-                onClick={() => { setActiveTab(tab.id); setSettingsExpanded(false); setSidebarOpen(false) }}
+                onClick={() => { setActiveTab(tab.id); setSidebarOpen(false) }}
                 className={`w-full flex items-center gap-3 px-4 py-3 rounded-xl text-sm font-medium transition-all duration-200 ${
+                  sidebarCollapsed ? 'lg:justify-center lg:px-2' : ''
+                } ${
                   isActive
                     ? 'bg-primary-500/15 text-primary-400'
                     : 'text-surface-400 hover:text-surface-200 hover:bg-surface-800/50'
                 }`}
+                title={sidebarCollapsed ? tab.label : ''}
               >
                 <tab.icon className={`w-5 h-5 flex-shrink-0 ${isActive ? 'drop-shadow-[0_0_8px_rgba(237,116,30,0.5)]' : ''}`} />
-                <span>{tab.label}</span>
+                {!sidebarCollapsed && <span className="lg:block">{tab.label}</span>}
               </button>
             )
           })}
-
-          {/* 设置 - 可折叠 */}
-          <div>
-            <button
-              onClick={() => {
-                const willExpand = !settingsExpanded
-                setSettingsExpanded(willExpand)
-                if (willExpand) {
-                  setActiveTab('settings')
-                  setSidebarOpen(false)
-                }
-              }}
-              className={`w-full flex items-center gap-3 px-4 py-3 rounded-xl text-sm font-medium transition-all duration-200 ${
-                activeTab === 'settings'
-                  ? 'bg-primary-500/15 text-primary-400'
-                  : 'text-surface-400 hover:text-surface-200 hover:bg-surface-800/50'
-              }`}
-            >
-              <Settings className={`w-5 h-5 flex-shrink-0 ${activeTab === 'settings' ? 'drop-shadow-[0_0_8px_rgba(237,116,30,0.5)]' : ''}`} />
-              <span className="flex-1 text-left">设置</span>
-              <ChevronDown className={`w-4 h-4 transition-transform duration-200 ${settingsExpanded ? 'rotate-180' : ''}`} />
-            </button>
-            <AnimatePresence>
-              {settingsExpanded && (
-                <motion.div
-                  initial={{ height: 0, opacity: 0 }}
-                  animate={{ height: 'auto', opacity: 1 }}
-                  exit={{ height: 0, opacity: 0 }}
-                  transition={{ duration: 0.2 }}
-                  className="overflow-hidden ml-4 mt-1 space-y-0.5 border-l border-surface-700/50 pl-3"
-                >
-                  {([
-                    { id: 'basic' as const, icon: Palette, label: '基础设置' },
-                    { id: 'other' as const, icon: Clock, label: '其它设置' },
-                    { id: 'about' as const, icon: Info, label: '网站说明' },
-                  ]).map((sub) => (
-                    <button
-                      key={sub.id}
-                      onClick={() => { setActiveTab('settings'); setSettingsSubTab(sub.id); setSidebarOpen(false) }}
-                      className={`w-full flex items-center gap-2 px-3 py-2 rounded-lg text-xs font-medium transition-colors ${
-                        settingsSubTab === sub.id && activeTab === 'settings'
-                          ? 'text-primary-400 bg-primary-500/10'
-                          : 'text-surface-500 hover:text-surface-300 hover:bg-surface-800/50'
-                      }`}
-                    >
-                      <sub.icon className="w-3.5 h-3.5" />
-                      <span>{sub.label}</span>
-                    </button>
-                  ))}
-                </motion.div>
-              )}
-            </AnimatePresence>
-          </div>
         </nav>
         {/* 侧边栏底部 - 插件选择 */}
         <div className="px-3 pb-4 border-t border-surface-800 pt-3">
@@ -1483,7 +1447,7 @@ function App() {
       </aside>
 
       {/* 主内容区 */}
-      <main className="flex-1 relative z-10 overflow-hidden lg:ml-[220px]">
+      <main className={`flex-1 relative z-10 overflow-hidden transition-all duration-300 ml-0 ${sidebarCollapsed ? 'lg:ml-[70px]' : 'lg:ml-[220px]'}`}>
         <div className="h-full relative">
           <div
             className={`absolute inset-0 h-full overflow-hidden transition-opacity duration-200 ${
@@ -1519,7 +1483,7 @@ function App() {
       {/* 迷你播放器 - 固定在底部导航上方 */}
       <AnimatePresence>
         {currentTrack && !showPlayer && (
-          <MiniPlayer onExpand={() => setShowPlayer(true)} onRetry={handleRetry} />
+          <MiniPlayer onExpand={() => setShowPlayer(true)} onRetry={handleRetry} onShowPlaylist={() => setActiveTab('playlist')} />
         )}
       </AnimatePresence>
 

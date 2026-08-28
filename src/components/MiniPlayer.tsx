@@ -1,14 +1,15 @@
 import { motion } from 'framer-motion'
-import { Play, Pause, SkipForward, Loader2, Music, RotateCw } from 'lucide-react'
+import { Play, Pause, SkipForward, Loader2, Music, RotateCw, ListMusic } from 'lucide-react'
 import { usePlayerStore } from '../stores/playerStore'
 import { getCurrentAndNextLyric } from '../lib/lyrics'
 
 interface MiniPlayerProps {
   onExpand: () => void
   onRetry?: () => void
+  onShowPlaylist?: () => void
 }
 
-export function MiniPlayer({ onExpand, onRetry }: MiniPlayerProps) {
+export function MiniPlayer({ onExpand, onRetry, onShowPlaylist }: MiniPlayerProps) {
   
   const {
     currentTrack,
@@ -125,6 +126,17 @@ export function MiniPlayer({ onExpand, onRetry }: MiniPlayerProps) {
               title="重试播放"
             >
               <RotateCw className="w-4 h-4" />
+            </button>
+          )}
+          
+          {/* 查看播放列表按钮 */}
+          {onShowPlaylist && (
+            <button
+              onClick={onShowPlaylist}
+              className="w-8 h-8 flex items-center justify-center text-surface-400 hover:text-surface-200 transition-colors"
+              title="查看播放列表"
+            >
+              <ListMusic className="w-4 h-4" />
             </button>
           )}
           

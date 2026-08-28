@@ -96,9 +96,12 @@ interface ImportedSheet {
 // 保存订阅源列表
 const saveSubscriptions = (subscriptions: Subscription[]) => {
   try {
-    localStorage.setItem(CACHE_KEY_SUBSCRIPTIONS, JSON.stringify(subscriptions))
+    const data = JSON.stringify(subscriptions)
+    console.log('[Cache] 保存订阅源:', subscriptions.length, '个', subscriptions)
+    localStorage.setItem(CACHE_KEY_SUBSCRIPTIONS, data)
+    console.log('[Cache] 保存成功，localStorage大小:', data.length, '字节')
   } catch (e) {
-    console.warn('[Cache] 保存订阅源失败:', e)
+    console.error('[Cache] 保存订阅源失败:', e)
   }
 }
 
@@ -153,9 +156,12 @@ const loadImportedSheets = (): ImportedSheet[] => {
 // 保存插件缓存
 const savePluginsCache = (caches: PluginCache[]) => {
   try {
-    localStorage.setItem(CACHE_KEY_PLUGINS, JSON.stringify(caches))
+    const data = JSON.stringify(caches)
+    console.log('[Cache] 保存插件缓存:', caches.length, '个', caches)
+    localStorage.setItem(CACHE_KEY_PLUGINS, data)
+    console.log('[Cache] 保存成功，localStorage大小:', data.length, '字节')
   } catch (e) {
-    console.warn('[Cache] 保存插件缓存失败:', e)
+    console.error('[Cache] 保存插件缓存失败:', e)
   }
 }
 
@@ -638,10 +644,12 @@ export const usePluginStore = create<PluginStoreState>((set, get) => ({
       url: pluginUrl,
       version: '1.0.0',
     })
-    descriptor.id = `${LOCAL_SUB_ID}:${pluginName}:${Date.now()}`
+    // 使用一致的ID生成逻辑，确保刷新后能正确恢复
+    const pluginId = `${LOCAL_SUB_ID}_${pluginName.replace(/\s+/g, '_').toLowerCase()}`
+    descriptor.id = pluginId
 
     // 缓存代码
-    setCachedPluginCode(descriptor.id, pluginUrl, code, '1.0.0')
+    setCachedPluginCode(pluginId, pluginUrl, code, '1.0.0')
 
     // 尝试执行验证
     try {
@@ -652,13 +660,23 @@ export const usePluginStore = create<PluginStoreState>((set, get) => ({
 
     // 更新插件缓存
     const caches = loadPluginsCache()
+    console.log('[Import] 当前插件缓存:', caches)
     const existingCache = caches.find(c => c.subscriptionId === LOCAL_SUB_ID)
     const newPluginDescriptor: PluginDescriptor = {
       name: pluginName,
       url: pluginUrl,
       version: '1.0.0',
     }
+    
+    // 检查是否已存在相同插件
     if (existingCache) {
+      const existingPlugin = existingCache.plugins.find(p => p.name === pluginName && p.url === pluginUrl)
+      if (existingPlugin) {
+        console.log('[Import] 插件已存在，跳过:', pluginName)
+        // 仍然重新加载插件
+        await get().loadAllPlugins()
+        return
+      }
       existingCache.plugins.push(newPluginDescriptor)
       existingCache.timestamp = Date.now()
     } else {
@@ -668,7 +686,12 @@ export const usePluginStore = create<PluginStoreState>((set, get) => ({
         timestamp: Date.now(),
       })
     }
+    console.log('[Import] 更新后的插件缓存:', caches)
     savePluginsCache(caches)
+    
+    // 验证保存是否成功
+    const savedCaches = loadPluginsCache()
+    console.log('[Import] 保存后读取的插件缓存:', savedCaches)
 
     // 重新加载所有插件
     await get().loadAllPlugins()
@@ -861,6 +884,10 @@ export const usePluginStore = create<PluginStoreState>((set, get) => ({
     const caches = loadPluginsCache()
     const savedActiveId = loadActivePluginId()
     
+    console.log('[LoadAll] 开始加载所有插件...')
+    console.log('[LoadAll] 订阅源:', subscriptions.length, '个')
+    console.log('[LoadAll] 插件缓存:', caches.length, '个', caches)
+    
     set({ pluginsLoading: true })
     
     // 收集所有插件描述符
@@ -869,11 +896,16 @@ export const usePluginStore = create<PluginStoreState>((set, get) => ({
     for (const subscription of subscriptions) {
       const cache = caches.find(c => c.subscriptionId === subscription.id)
       if (cache?.plugins) {
+        console.log(`[LoadAll] 订阅源 ${subscription.name} (${subscription.id}) 有 ${cache.plugins.length} 个插件`)
         for (const descriptor of cache.plugins) {
           allPluginDescriptors.push({ subscriptionId: subscription.id, descriptor })
         }
+      } else {
+        console.log(`[LoadAll] 订阅源 ${subscription.name} (${subscription.id}) 没有插件缓存`)
       }
     }
+    
+    console.log('[LoadAll] 总共收集到', allPluginDescriptors.length, '个插件描述符')
     
     if (allPluginDescriptors.length === 0) {
       set({ plugins: [], pluginsLoading: false })
@@ -930,6 +962,22 @@ export const usePluginStore = create<PluginStoreState>((set, get) => ({
     if (!activeId) {
       const firstReady = loadedPlugins.find((p) => p.status === 'ready')
       activeId = firstReady?.meta.id || null
+    }
+    
+    // 统计加载结果
+    const readyCount = loadedPlugins.filter(p => p.status === 'ready').length
+    const errorCount = loadedPlugins.filter(p => p.status === 'error').length
+    const errorPlugins = loadedPlugins.filter(p => p.status === 'error').map(p => ({ name: p.meta.name, error: p.error }))
+    
+    console.log('[LoadAll] 插件加载完成:', {
+      total: loadedPlugins.length,
+      ready: readyCount,
+      error: errorCount,
+      activeId,
+    })
+    
+    if (errorCount > 0) {
+      console.warn('[LoadAll] 加载失败的插件:', errorPlugins)
     }
     
     set({ 
@@ -1984,6 +2032,16 @@ export const usePluginStore = create<PluginStoreState>((set, get) => ({
   init: async () => {
     console.log('[Init] 初始化插件系统...')
     
+    // 调试：检查localStorage中的数据
+    const debugSubs = localStorage.getItem(CACHE_KEY_SUBSCRIPTIONS)
+    const debugPlugins = localStorage.getItem(CACHE_KEY_PLUGINS)
+    const debugPluginCode = localStorage.getItem('musicfree.plugin.code.cache')
+    console.log('[Init] localStorage检查:', {
+      subscriptions: debugSubs ? `${debugSubs.length}字节` : '无',
+      pluginsCache: debugPlugins ? `${debugPlugins.length}字节` : '无',
+      pluginCode: debugPluginCode ? `${debugPluginCode.length}字节` : '无',
+    })
+    
     // 注册用户变量读取函数到全局（供插件沙箱中的 env.getUserVariables 使用）
     ;(globalThis as any).__musicfree_getUserVariables = (pluginId: string) => {
       return get().pluginUserVariables[pluginId] ?? {}
@@ -1991,14 +2049,35 @@ export const usePluginStore = create<PluginStoreState>((set, get) => ({
     
     // 加载保存的订阅源
     const savedSubscriptions = loadSubscriptions()
-    console.log('[Init] 已保存的订阅源:', savedSubscriptions.length, '个')
+    console.log('[Init] 已保存的订阅源:', savedSubscriptions.length, '个', savedSubscriptions)
+    
+    // 检查插件缓存中是否有local-plugins，但订阅源列表中没有
+    const caches = loadPluginsCache()
+    const localPluginsCache = caches.find(c => c.subscriptionId === 'local-plugins')
+    const hasLocalSub = savedSubscriptions.some(s => s.id === 'local-plugins')
+    
+    // 如果插件缓存中有local-plugins，但订阅源列表中没有，自动创建
+    if (localPluginsCache && !hasLocalSub) {
+      console.log('[Init] 发现本地插件缓存但缺少订阅源，自动创建local-plugins订阅源')
+      const localSub: Subscription = {
+        id: 'local-plugins',
+        url: 'local://',
+        name: '本地插件',
+        addedAt: Date.now(),
+        lastUpdated: Date.now(),
+      }
+      savedSubscriptions.push(localSub)
+      saveSubscriptions(savedSubscriptions)
+    }
     
     // 使用保存的订阅源（首次使用时为空，需要用户手动导入预设配置）
     set({ subscriptions: savedSubscriptions })
     
     // 如果有订阅源，从缓存加载插件
     if (savedSubscriptions.length > 0) {
+      console.log('[Init] 插件缓存:', caches.length, '个', caches)
       await get().loadAllPlugins()
+      console.log('[Init] 加载完成，当前插件数:', get().plugins.length)
     } else {
       console.log('[Init] 暂无订阅源，请点击"导入预设配置"按钮添加默认音乐源')
     }
