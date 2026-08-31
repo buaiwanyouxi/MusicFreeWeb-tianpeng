@@ -20,10 +20,9 @@ type SandboxLogFn = (type: SandboxLogType, message: string) => void
 let logSink: SandboxLogFn | null = null
 let installed = false
 
-const g = (): Record<string, unknown> => globalThis as unknown as Record<string, unknown>
+const activeContexts = new Set<symbol>()
 
-export const isPluginActive = (): boolean =>
-  typeof g().__mfPluginDepth === 'number' && (g().__mfPluginDepth as number) > 0
+export const isPluginActive = (): boolean => activeContexts.size > 0
 
 /** 宿主接入调试日志系统（pluginHost 初始化时调用一次） */
 export const setSandboxLogSink = (fn: SandboxLogFn | null): void => {
@@ -42,15 +41,15 @@ const log = (type: SandboxLogType, message: string): void => {
  * 在"插件上下文"中执行 fn：
  * 期间插件无法读到页面 localStorage（获得内存 shim），
  * 期间插件绕过代理的直连外网请求会被审计记录。
+ * 使用令牌集合替代全局计数器，避免并发竞态。
  */
 export const runInPluginContext = async <T>(fn: () => Promise<T> | T): Promise<T> => {
-  const s = g()
-  const prev = typeof s.__mfPluginDepth === 'number' ? (s.__mfPluginDepth as number) : 0
-  s.__mfPluginDepth = prev + 1
+  const token = Symbol('plugin')
+  activeContexts.add(token)
   try {
     return await fn()
   } finally {
-    s.__mfPluginDepth = Math.max(prev, 0)
+    activeContexts.delete(token)
   }
 }
 

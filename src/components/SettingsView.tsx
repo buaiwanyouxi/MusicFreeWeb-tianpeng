@@ -19,6 +19,7 @@ import {
   Cloud,
   CloudUpload,
   CloudDownload,
+  Bug,
 } from 'lucide-react'
 import { startTimer, clearTimer } from '../lib/sleepTimer'
 import { usePlayerStore } from '../stores/playerStore'
@@ -718,9 +719,73 @@ function OtherSettings() {
             </p>
           </div>
         </div>
+
+        {/* 插件调试日志 */}
+        <DebugLogSection />
       </div>
     </motion.div>
   )
+}
+
+// 调试日志区
+function DebugLogSection() {
+  const [debugEnabled, setDebugEnabled] = useState(() => {
+    return localStorage.getItem('musicfree.debugLogs') === 'true'
+  })
+  const [showPanel, setShowPanel] = useState(false)
+
+  const toggleDebug = (enabled: boolean) => {
+    setDebugEnabled(enabled)
+    localStorage.setItem('musicfree.debugLogs', enabled ? 'true' : 'false')
+    // 动态导入避免循环依赖
+    import('../lib/pluginHost').then(({ enableDebugLogs }) => {
+      enableDebugLogs(enabled)
+    })
+  }
+
+  return (
+    <>
+      <div className="glass rounded-xl p-4">
+        <SettingLabel>插件调试日志</SettingLabel>
+        <div className="flex items-center justify-between">
+          <div className="flex-1">
+            <p className="text-sm text-surface-200">启用调试日志</p>
+            <p className="text-xs text-surface-500 mt-0.5">记录插件请求、URL 重写、代理命中等详细信息</p>
+          </div>
+          <input
+            type="checkbox"
+            checked={debugEnabled}
+            onChange={(e) => toggleDebug(e.target.checked)}
+            className="w-10 h-5 rounded-full bg-surface-700 appearance-none relative cursor-pointer transition-colors checked:bg-primary-500"
+          />
+        </div>
+        {debugEnabled && (
+          <button
+            onClick={() => setShowPanel(true)}
+            className="w-full mt-3 flex items-center justify-center gap-2 p-2.5 rounded-lg bg-surface-800 text-surface-300 text-sm hover:bg-surface-700 transition-colors"
+          >
+            <Bug className="w-4 h-4" />
+            <span>查看调试面板</span>
+          </button>
+        )}
+      </div>
+
+      {showPanel && (
+        <DebugPanelLazy onClose={() => setShowPanel(false)} />
+      )}
+    </>
+  )
+}
+
+function DebugPanelLazy({ onClose }: { onClose: () => void }) {
+  const [Comp, setComp] = useState<React.ComponentType<{ onClose: () => void }> | null>(null)
+
+  useEffect(() => {
+    import('./DebugPanel').then(mod => setComp(() => mod.DebugPanel))
+  }, [])
+
+  if (!Comp) return null
+  return <Comp onClose={onClose} />
 }
 
 // 网站说明

@@ -14,3 +14,4 @@ npm-debug.log*
 coverage
 *.tsbuildinfo
 e2e-feed.json
+.e2e-server.pid

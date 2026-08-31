@@ -11,6 +11,7 @@ import type {
 import CryptoJS from 'crypto-js'
 import bigInt from 'big-integer'
 import { runInPluginContext, setSandboxLogSink } from './pluginSandbox'
+import { PROXY_TARGETS } from '../../shared/proxyTargets.js'
 
 const STORAGE_KEY = 'musicfree.h5.plugins'
 export const DEFAULT_PLUGIN_FEED = ''
@@ -54,22 +55,12 @@ const isRemoteUrl = (url: string) => /^https?:\/\//i.test(url)
 
 // 检测是否是媒体资源 URL（图片、音频、视频等，这些资源通常没有 CORS 限制）
 const isMediaUrl = (url: string): boolean => {
-  // 检查 URL 路径中的文件扩展名
-  const mediaExtensions = [
-    // 图片
-    /\.(jpg|jpeg|png|gif|webp|svg|bmp|ico)$/i,
-    // 音频
-    /\.(mp3|wav|ogg|m4a|aac|flac|wma|mp4|m4v)$/i,
-    // 视频
-    /\.(mp4|webm|mkv|avi|mov|flv|m3u8)$/i,
-  ]
-  
-  // 检查 URL 中是否包含媒体扩展名
-  for (const pattern of mediaExtensions) {
-    if (pattern.test(url)) {
-      return true
-    }
-  }
+  // 先剥离 querystring，避免 ?token=xxx.mp3 误判
+  let pathname = url
+  try { pathname = new URL(url, 'https://x.invalid').pathname } catch { /* 保持原串 */ }
+
+  const MEDIA_EXT = /\.(jpg|jpeg|png|gif|webp|svg|bmp|ico|mp3|wav|ogg|m4a|aac|flac|wma|opus|ape|m4s|mp4|m4v|webm|mkv|avi|mov|flv|m3u8)$/i
+  if (MEDIA_EXT.test(pathname)) return true
   
   // 检查是否是常见的媒体资源路径模式
   const mediaPathPatterns = [
@@ -218,93 +209,10 @@ const buildSinglePluginDescriptor = (url: string, code?: string): PluginDescript
   let description: string | undefined
   
   if (code) {
-    // 尝试执行代码来获取 module.exports 中的字段
-    try {
-      // 创建一个安全的执行环境
-      const moduleExports: any = {}
-      const moduleObj: any = { exports: moduleExports }
-      
-      // 提供必要的 require shim
-      const requireShim = (_moduleName: string) => {
-        // 返回空对象，避免执行错误
-        return {}
-      }
-      
-      // 执行代码（在 try-catch 中，避免错误影响）
-      try {
-        // 使用 Function 构造函数来执行代码，避免污染全局作用域
-        // 注意：混淆的代码可能会访问全局变量，所以我们需要提供一些基本的全局变量
-        const func = new Function(
-          'module',
-          'exports',
-          'require',
-          code
-        )
-        
-        // 执行函数
-        func(moduleObj, moduleExports, requireShim)
-        
-        // 检查 module.exports 是否被设置（可能是通过 module['exports'] 设置的）
-        // 注意：混淆代码可能使用 module['exports'] 来设置，所以需要检查 moduleObj.exports
-        const finalExports = moduleObj.exports || moduleExports
-        
-        // 从 module.exports 中提取字段
-        if (finalExports && typeof finalExports === 'object') {
-          console.log('[PluginHost] 从 module.exports 提取字段:', {
-            platform: finalExports.platform,
-            name: finalExports.name,
-            version: finalExports.version,
-            description: finalExports.description,
-            allKeys: Object.keys(finalExports),
-          })
-          
-          if (finalExports.platform) {
-            name = String(finalExports.platform)
-            console.log('[PluginHost] 找到 platform:', name)
-          } else if (finalExports.name) {
-            name = String(finalExports.name)
-            console.log('[PluginHost] 找到 name:', name)
-          }
-          
-          if (finalExports.version) {
-            version = String(finalExports.version)
-          }
-          
-          if (finalExports.description) {
-            description = String(finalExports.description)
-          }
-        } else {
-          console.warn('[PluginHost] module.exports 不是对象:', finalExports)
-        }
-        
-        // 如果执行成功但没有获取到值，尝试正则表达式作为补充
-        if (name === fallbackName) {
-          const extractedName = extractPluginField(code, 'platform') || extractPluginField(code, 'name')
-          if (extractedName) {
-            name = extractedName
-            console.log('[PluginHost] 通过正则表达式提取到名称:', name)
-          }
-        }
-      } catch (execError: any) {
-        // 执行失败，回退到正则表达式提取
-        console.warn('[PluginHost] 执行插件代码失败，使用正则表达式提取:', execError?.message || execError)
-        const extractedName = extractPluginField(code, 'platform') || extractPluginField(code, 'name')
-        if (extractedName) {
-          name = extractedName
-        }
-        version = extractPluginField(code, 'version')
-        description = extractPluginField(code, 'description')
-      }
-    } catch (error: any) {
-      // 如果执行失败，使用正则表达式提取
-      console.warn('[PluginHost] 提取插件信息失败:', error?.message || error)
-      const extractedName = extractPluginField(code, 'platform') || extractPluginField(code, 'name')
-      if (extractedName) {
-        name = extractedName
-      }
-      version = extractPluginField(code, 'version')
-      description = extractPluginField(code, 'description')
-    }
+    const extractedName = extractPluginField(code, 'platform') || extractPluginField(code, 'name')
+    if (extractedName) name = extractedName
+    version = extractPluginField(code, 'version')
+    description = extractPluginField(code, 'description')
   }
 
   return {
@@ -382,102 +290,39 @@ type PluginHostContext = {
 // 支持的音乐源代理配置：
 // - 小秋音乐 (QQ 音乐 API)
 // - 小蜗音乐 (酷我音乐 API)
-// - 小芸音乐 (网易云音乐 API)
-// - 小枸音乐 (酷狗音乐 API)
-// - bilibili (B站 API)
-// - 元力QQ (QQ 音乐 API + 海棠音乐 API)
-const urlRewriteRules: Array<{ pattern: RegExp; replace: string }> = [
-  // ============ QQ 音乐 API (小秋、元力QQ) ============
-  { pattern: /^https?:\/\/c\.y\.qq\.com\//, replace: '/api/proxy/qqmusic_c/' },
-  { pattern: /^https?:\/\/u\.y\.qq\.com\//, replace: '/api/proxy/qqmusic_u/' },
-  { pattern: /^https?:\/\/i\.y\.qq\.com\//, replace: '/api/proxy/qqmusic_i/' },
-  
-  // ============ 酷我音乐 API (小蜗、网易音乐灰色歌曲) ============
-  { pattern: /^https?:\/\/search\.kuwo\.cn\//, replace: '/api/proxy/kuwo_search/' },
-  { pattern: /^https?:\/\/m\.kuwo\.cn\//, replace: '/api/proxy/kuwo_m/' },
-  { pattern: /^https?:\/\/wapi\.kuwo\.cn\//, replace: '/api/proxy/kuwo_wapi/' },
-  { pattern: /^https?:\/\/kbangserver\.kuwo\.cn\//, replace: '/api/proxy/kuwo_kbang/' },
-  { pattern: /^https?:\/\/nplserver\.kuwo\.cn\//, replace: '/api/proxy/kuwo_npl/' },
-  { pattern: /^https?:\/\/mobileinterfaces\.kuwo\.cn\//, replace: '/api/proxy/kuwo_mobile/' },
-  { pattern: /^https?:\/\/nmobi\.kuwo\.cn\//, replace: '/api/proxy/kuwo_nmobi/' },
-  
-  // ============ 网易云音乐 API (小芸、网易音乐) ============
-  { pattern: /^https?:\/\/interface3\.music\.163\.com\//, replace: '/api/proxy/netease_interface3/' },
-  { pattern: /^https?:\/\/interface\.music\.163\.com\//, replace: '/api/proxy/netease_interface/' },
-  { pattern: /^https?:\/\/y\.music\.163\.com\//, replace: '/api/proxy/netease_y/' },
-  { pattern: /^https?:\/\/music\.163\.com\//, replace: '/api/proxy/netease/' },
-  
-  // ============ 酷狗音乐 API (小枸) ============
-  { pattern: /^https?:\/\/msearch\.kugou\.com\//, replace: '/api/proxy/kugou_search/' },
-  { pattern: /^https?:\/\/mobilecdn\.kugou\.com\//, replace: '/api/proxy/kugou_mobilecdn/' },
-  { pattern: /^https?:\/\/mobilecdnbj\.kugou\.com\//, replace: '/api/proxy/kugou_mobilecdnbj/' },
-  { pattern: /^https?:\/\/lyrics\.kugou\.com\//, replace: '/api/proxy/kugou_lyrics/' },
-  { pattern: /^https?:\/\/t\.kugou\.com\//, replace: '/api/proxy/kugou_t/' },
-  { pattern: /^https?:\/\/www2\.kugou\.kugou\.com\//, replace: '/api/proxy/kugou_www2/' },
-  { pattern: /^https?:\/\/gateway\.kugou\.com\//, replace: '/api/proxy/kugou_gateway/' },
-  { pattern: /^https?:\/\/songsearch\.kugou\.com\//, replace: '/api/proxy/kugou_songsearch/' },
-  
-  // ============ B站 ============
-  { pattern: /^https?:\/\/api\.bilibili\.com\//, replace: '/api/proxy/biliapi/' },
-  { pattern: /^https?:\/\/www\.bilibili\.com\//, replace: '/api/proxy/bili/' },
-  
-  // ============ 海棠音乐 (元力QQ) ============
-  { pattern: /^https?:\/\/musicapi\.haitangw\.net\//, replace: '/api/proxy/haitang/' },
-  { pattern: /^https?:\/\/music\.haitangw\.net\//, replace: '/api/proxy/haitangm/' },
-  
-  // ============ LX Music API (获取播放URL) ============
-  { pattern: /^https?:\/\/lxmusicapi\.onrender\.com\//, replace: '/api/proxy/lxmusic/' },
-  
-  // ============ ikun 音源 API ============
-  { pattern: /^https?:\/\/api\.ikunshare\.com\//, replace: '/api/proxy/ikun/' },
-  
-  // ============ 海棠音乐 (haitangw.cc) ============
-  { pattern: /^https?:\/\/music\.haitangw\.cc\//, replace: '/api/proxy/haitangcc/' },
-  
-  // ============ 段兄音乐 API (元力WY) ============
-  { pattern: /^https?:\/\/share\.duanx\.cn\//, replace: '/api/proxy/duanx/' },
-  
-  // ============ 咪咕音乐 API ============
-  { pattern: /^https?:\/\/m\.music\.migu\.cn\//, replace: '/api/proxy/migu_m/' },
-  { pattern: /^https?:\/\/music\.migu\.cn\//, replace: '/api/proxy/migu/' },
-  { pattern: /^https?:\/\/cdnmusic\.migu\.cn\//, replace: '/api/proxy/migu_cdn/' },
-  { pattern: /^https?:\/\/app\.u\.nf\.migu\.cn\//, replace: '/api/proxy/migu_app_u/' },
-  { pattern: /^https?:\/\/app\.c\.nf\.migu\.cn\//, replace: '/api/proxy/migu_app_c/' },
-  
-  // ============ 插件托管 (kstore.vip) ============
-  { pattern: /^https?:\/\/13413\.kstore\.vip\//, replace: '/api/proxy/kstore/' },
-  
-  // ============ 歌曲宝 (gequbao) ============
-  { pattern: /^https?:\/\/www\.gequbao\.com\//, replace: '/api/proxy/gequbao/' },
-  { pattern: /^https?:\/\/gequbao\.com\//, replace: '/api/proxy/gequbao/' },
+// 从统一数据源自动生成 URL 重写规则（shared/proxyTargets.mjs）
+// 按 host 长度降序排列，确保更具体的子域优先匹配
+const urlRewriteRules: Array<{ pattern: RegExp; replace: string }> = (() => {
+  const rules: Array<{ pattern: RegExp; replace: string; _hostLen: number }> = []
 
-  // ============ 放屁音乐网 (fangpi) ============
-  { pattern: /^https?:\/\/www\.fangpi\.com\//, replace: '/api/proxy/fangpi/' },
-  { pattern: /^https?:\/\/fangpi\.com\//, replace: '/api/proxy/fangpi/' },
+  for (const [key, cfg] of Object.entries(PROXY_TARGETS)) {
+    if (cfg.devOnly) continue
+    try {
+      const host = new URL(cfg.target).host
+      const escaped = host.replace(/\./g, '\\.')
+      rules.push({
+        pattern: new RegExp(`^https?://${escaped}/`),
+        replace: `/api/proxy/${key}/`,
+        _hostLen: host.length,
+      })
+    } catch { /* skip invalid targets */ }
+  }
 
-  // ============ Tonzhon 搜索 (xiage) ============
-  { pattern: /^https?:\/\/tonzhon\.com\//, replace: '/api/proxy/tonzhon/' },
-  { pattern: /^https?:\/\/www\.tonzhon\.com\//, replace: '/api/proxy/tonzhon/' },
+  // 按 host 长度降序：长 host（如 interface3.music.163.com）优先于短 host（如 music.163.com）
+  rules.sort((a, b) => b._hostLen - a._hostLen)
 
-  // ============ 布谷音乐镜像 ============
-  { pattern: /^https?:\/\/buguomusic\.com\//, replace: '/api/proxy/buguomusic/' },
-  { pattern: /^https?:\/\/www\.buguomusic\.com\//, replace: '/api/proxy/buguomusic/' },
+  // 补充多 host 变体规则（www/非 www 等）
+  const extraPatterns: Array<{ pattern: RegExp; replace: string }> = [
+    { pattern: /^https?:\/\/gequbao\.com\//, replace: '/api/proxy/gequbao/' },
+    { pattern: /^https?:\/\/(www\.)?fangpi\.com\//, replace: '/api/proxy/fangpi/' },
+    { pattern: /^https?:\/\/(www\.)?tonzhon\.com\//, replace: '/api/proxy/tonzhon/' },
+    { pattern: /^https?:\/\/(www\.)?buguomusic\.com\//, replace: '/api/proxy/buguomusic/' },
+    { pattern: /^https?:\/\/(www|zh)\.followlyrics\.com\//, replace: '/api/proxy/followlyrics/' },
+    { pattern: /^https?:\/\/(www\.)?buguyy\.top\//, replace: '/api/proxy/buguyy/' },
+  ]
 
-  // ============ 歌词网 (followlyrics) ============
-  { pattern: /^https?:\/\/(www|zh)\.followlyrics\.com\//, replace: '/api/proxy/followlyrics/' },
-
-  // ============ 布谷音乐 (镜像API/酷我/QQ榜/酷狗榜) ============
-  { pattern: /^https?:\/\/(www\.)?buguyy\.top\//, replace: '/api/proxy/buguyy/' },
-  { pattern: /^https?:\/\/www\.kuwo\.cn\//, replace: '/api/proxy/kuwo_www/' },
-  { pattern: /^https?:\/\/y\.qq\.com\//, replace: '/api/proxy/qq_html/' },
-  { pattern: /^https?:\/\/www\.kugou\.com\//, replace: '/api/proxy/kugou_www/' },
-
-  // ============ 插件加载 ============
-  { pattern: /^https?:\/\/gitee\.com\//, replace: '/api/proxy/gitee/' },
-  { pattern: /^https?:\/\/raw\.giteeusercontent\.com\//, replace: '/api/proxy/gitee_raw/' },
-  { pattern: /^https?:\/\/raw\.githubusercontent\.com\//, replace: '/api/proxy/github/' },
-  { pattern: /^https?:\/\/fastly\.jsdelivr\.net\//, replace: '/api/proxy/jsdelivr/' },
-]
+  return [...rules.map(({ pattern, replace }) => ({ pattern, replace })), ...extraPatterns]
+})()
 
 // 重写 URL 使用代理（开发环境使用本地代理，生产环境使用 API 代理）
 // 注意：媒体资源（图片、音频、视频）不通过代理，直接请求
@@ -599,8 +444,27 @@ const createHostApi = (
   console: createPluginConsole(descriptor.name),
 })
 
-// 歌词缓存：key 是歌曲 ID，value 是歌词文本（全局共享，用于在 axios 响应和 resolveStream 之间传递歌词）
-const lyricCache = new Map<string, string>()
+// 歌词缓存（LRU，上限 200 条）
+class LRUCache<V> {
+  private map = new Map<string, V>()
+  constructor(private capacity: number) {}
+  get(key: string): V | undefined {
+    const val = this.map.get(key)
+    if (val !== undefined) { this.map.delete(key); this.map.set(key, val) }
+    return val
+  }
+  set(key: string, value: V) {
+    this.map.delete(key)
+    this.map.set(key, value)
+    if (this.map.size > this.capacity) {
+      const oldest = this.map.keys().next().value
+      if (oldest !== undefined) this.map.delete(oldest)
+    }
+  }
+  has(key: string) { return this.map.has(key) }
+  keys() { return this.map.keys() }
+}
+const lyricCache = new LRUCache<string>(200)
 
 // 创建 axios 兼容的模拟实现
 const createAxiosShim = (_proxiedFetch: typeof fetch) => {
@@ -943,6 +807,12 @@ const createAxiosShim = (_proxiedFetch: typeof fetch) => {
         }
       }
       
+      // responseType: 'arraybuffer' 直接返回 ArrayBuffer
+      if (config.responseType === 'arraybuffer') {
+        const buffer = await response.arrayBuffer()
+        return { data: buffer, status: response.status, headers: response.headers, config }
+      }
+
       const result = await processResponse(response, finalUrl)
       
       // 记录响应
@@ -1005,10 +875,17 @@ const createAxiosShim = (_proxiedFetch: typeof fetch) => {
       }
       return request({ ...defaults, ...urlOrConfig })
     }
-    instance.get = (url: string, config?: Parameters<typeof request>[0]) => 
+    instance.get = (url: string, config?: Parameters<typeof request>[0]) =>
       request({ ...defaults, ...config, url, method: 'GET' })
-    instance.post = (url: string, data?: unknown, config?: Parameters<typeof request>[0]) => 
+    instance.post = (url: string, data?: unknown, config?: Parameters<typeof request>[0]) =>
       request({ ...defaults, ...config, url, method: 'POST', data })
+    instance.put = (url: string, data?: unknown, config?: Parameters<typeof request>[0]) =>
+      request({ ...defaults, ...config, url, method: 'PUT', data })
+    instance.delete = (url: string, config?: Parameters<typeof request>[0]) =>
+      request({ ...defaults, ...config, url, method: 'DELETE' })
+    instance.request = (config2?: Parameters<typeof request>[0]) =>
+      request({ ...defaults, ...config2 })
+    instance.interceptors = { request: { use: () => 0 }, response: { use: () => 0 } }
     instance.defaults = defaults || {}
     return instance
   }
@@ -1307,9 +1184,9 @@ const createCryptoShim = () => {
   
   return {
     enc,
-    MD5: (str: string) => createWordArray(new TextEncoder().encode(str)),
-    SHA1: (str: string) => createWordArray(new TextEncoder().encode(str)),
-    SHA256: (str: string) => createWordArray(new TextEncoder().encode(str)),
+    MD5: (() => { throw new Error('[H5] crypto-js 不可用，MD5 无法计算') }) as any,
+    SHA1: (() => { throw new Error('[H5] crypto-js 不可用，SHA1 无法计算') }) as any,
+    SHA256: (() => { throw new Error('[H5] crypto-js 不可用，SHA256 无法计算') }) as any,
     AES: {
       encrypt: (data: string, _key: string) => ({ toString: () => btoa(data) }),
       decrypt: (data: string, _key: string) => ({ 

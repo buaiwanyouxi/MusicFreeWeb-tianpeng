@@ -1,240 +1,18 @@
 // Netlify Function 处理 API 代理请求
 // 路径: /api/proxy/[type]/[path]
+// 数据源: shared/proxyTargets.js（唯一真相）
 
-// 代理目标配置 - 支持的音乐源所需的代理
-const proxyTargets = {
-  // ============ QQ 音乐 API (小秋、元力QQ) ============
-  qqmusic_c: {
-    target: 'https://c.y.qq.com',
-    headers: { referer: 'https://y.qq.com/' },
-  },
-  qqmusic_u: {
-    target: 'https://u.y.qq.com',
-    headers: { referer: 'https://y.qq.com/' },
-  },
-  qqmusic_i: {
-    target: 'http://i.y.qq.com',
-    headers: { referer: 'https://y.qq.com/' },
-  },
-  
-  // ============ 酷我音乐 API (元力KW、小蜗) ============
-  kuwo_search: {
-    target: 'https://search.kuwo.cn',
-    headers: { referer: 'https://www.kuwo.cn/' },
-  },
-  kuwo_m: {
-    target: 'https://m.kuwo.cn',
-    headers: { referer: 'https://www.kuwo.cn/' },
-  },
-  kuwo_wapi: {
-    target: 'https://wapi.kuwo.cn',
-    headers: { referer: 'https://www.kuwo.cn/' },
-  },
-  kuwo_kbang: {
-    target: 'https://kbangserver.kuwo.cn',
-    headers: { referer: 'https://www.kuwo.cn/' },
-  },
-  kuwo_npl: {
-    target: 'https://nplserver.kuwo.cn',
-    headers: { referer: 'https://www.kuwo.cn/' },
-  },
-  kuwo_mobile: {
-    target: 'https://mobileinterfaces.kuwo.cn',
-    headers: { referer: 'https://www.kuwo.cn/' },
-  },
-  kuwo_nmobi: {
-    target: 'https://nmobi.kuwo.cn',
-    headers: { referer: 'https://www.kuwo.cn/' },
-  },
-  
-  // ============ 网易云音乐 API (小芸、网易音乐) ============
-  netease: {
-    target: 'https://music.163.com',
-    headers: { referer: 'https://music.163.com/' },
-  },
-  netease_interface: {
-    target: 'https://interface.music.163.com',
-    headers: { referer: 'https://music.163.com/' },
-  },
-  netease_interface3: {
-    target: 'https://interface3.music.163.com',
-    headers: { referer: 'https://music.163.com/' },
-  },
-  netease_y: {
-    target: 'https://y.music.163.com',
-    headers: { referer: 'https://music.163.com/' },
-  },
-  
-  // ============ 酷狗音乐 API (元力KG、小枸) ============
-  kugou_search: {
-    target: 'https://msearch.kugou.com',
-    headers: { referer: 'https://www.kugou.com/' },
-  },
-  kugou_mobilecdn: {
-    target: 'https://mobilecdn.kugou.com',
-    headers: { referer: 'https://www.kugou.com/' },
-  },
-  kugou_mobilecdnbj: {
-    target: 'https://mobilecdnbj.kugou.com',
-    headers: { referer: 'https://www.kugou.com/' },
-  },
-  kugou_lyrics: {
-    target: 'https://lyrics.kugou.com',
-    headers: { referer: 'https://www.kugou.com/' },
-  },
-  kugou_t: {
-    target: 'https://t.kugou.com',
-    headers: { referer: 'https://www.kugou.com/' },
-  },
-  kugou_www2: {
-    target: 'https://www2.kugou.kugou.com',
-    headers: { referer: 'https://www.kugou.com/' },
-  },
-  kugou_gateway: {
-    target: 'https://gateway.kugou.com',
-    headers: { referer: 'https://www.kugou.com/' },
-  },
-  kugou_songsearch: {
-    target: 'https://songsearch.kugou.com',
-    headers: { referer: 'https://www.kugou.com/' },
-  },
-  
-  // ============ B站 ============
-  bili: {
-    target: 'https://www.bilibili.com',
-    headers: { referer: 'https://www.bilibili.com/' },
-  },
-  biliapi: {
-    target: 'https://api.bilibili.com',
-    headers: { referer: 'https://www.bilibili.com/' },
-  },
-  
-  // ============ 海棠音乐 (元力QQ) ============
-  haitang: {
-    target: 'http://musicapi.haitangw.net',
-  },
-  haitangm: {
-    target: 'http://music.haitangw.net',
-  },
-  
-  // ============ LX Music API (获取播放URL) ============
-  lxmusic: {
-    target: 'https://lxmusicapi.onrender.com',
-  },
-  
-  // ============ ikun 音源 API ============
-  ikun: {
-    target: 'https://api.ikunshare.com',
-  },
-  
-  // ============ 海棠音乐 (haitangw.cc) ============
-  haitangcc: {
-    target: 'https://music.haitangw.cc',
-    headers: { referer: 'https://music.haitangw.cc/' },
-  },
-  
-  // ============ 段兄音乐 API (元力WY) ============
-  duanx: {
-    target: 'https://share.duanx.cn',
-  },
-  
-  // ============ 咪咕音乐 API ============
-  migu_m: {
-    target: 'https://m.music.migu.cn',
-    headers: { referer: 'https://music.migu.cn/' },
-  },
-  migu: {
-    target: 'https://music.migu.cn',
-    headers: { referer: 'https://music.migu.cn/' },
-  },
-  migu_cdn: {
-    target: 'https://cdnmusic.migu.cn',
-    headers: { referer: 'https://music.migu.cn/' },
-  },
-  migu_app_u: {
-    target: 'https://app.u.nf.migu.cn',
-    headers: { referer: 'https://music.migu.cn/' },
-  },
-  migu_app_c: {
-    target: 'https://app.c.nf.migu.cn',
-    headers: { referer: 'https://music.migu.cn/' },
-  },
-  
-  // ============ 插件托管 (kstore.vip) ============
-  kstore: {
-    target: 'https://13413.kstore.vip',
-  },
-  
-  // ============ 歌曲宝 (gequbao) ============
-  gequbao: {
-    target: 'https://www.gequbao.com',
-    headers: { referer: 'https://www.gequbao.com/' },
-  },
+import { PROXY_TARGETS, COMMON_HEADERS } from '../../shared/proxyTargets.js'
 
-  // ============ 放屁音乐网 (fangpi) ============
-  fangpi: {
-    target: 'https://www.fangpi.com',
-    headers: { referer: 'https://www.fangpi.com/' },
-  },
-
-  // ============ Tonzhon 搜索 (xiage) ============
-  tonzhon: {
-    target: 'https://tonzhon.com',
-    headers: { referer: 'https://tonzhon.com/' },
-  },
-
-  // ============ 布谷音乐镜像 ============
-  buguomusic: {
-    target: 'https://buguomusic.com',
-    headers: { referer: 'https://buguomusic.com/' },
-  },
-
-  // ============ 歌词网 (followlyrics 实际站点为 zh 子域) ============
-  followlyrics: {
-    target: 'https://zh.followlyrics.com',
-    headers: { referer: 'https://zh.followlyrics.com/' },
-  },
-
-  // ============ 布谷音乐 ============
-  buguyy: {
-    target: 'https://www.buguyy.top',
-    headers: { referer: 'https://www.buguyy.top/' },
-  },
-  kuwo_www: {
-    target: 'https://www.kuwo.cn',
-    headers: { referer: 'https://www.kuwo.cn/' },
-  },
-  qq_html: {
-    target: 'https://y.qq.com',
-    headers: { referer: 'https://y.qq.com/' },
-  },
-  kugou_www: {
-    target: 'https://www.kugou.com',
-    headers: { referer: 'https://www.kugou.com/' },
-  },
-
-  // ============ 插件加载所需 ============
-  gitee: {
-    target: 'https://gitee.com',
-    headers: { referer: 'https://gitee.com/' },
-  },
-  gitee_raw: {
-    target: 'https://raw.giteeusercontent.com',
-    headers: { referer: 'https://gitee.com/' },
-  },
-  github: {
-    target: 'https://raw.githubusercontent.com',
-  },
-  jsdelivr: {
-    target: 'https://fastly.jsdelivr.net',
-  },
+// 构建运行时查找表（排除 devOnly 条目）
+const proxyTargets = {}
+for (const [key, cfg] of Object.entries(PROXY_TARGETS)) {
+  if (!cfg.devOnly) {
+    proxyTargets[key] = cfg
+  }
 }
 
-const commonHeaders = {
-  'user-agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36',
-}
-
-exports.handler = async (event, context) => {
+export async function handler(event, context) {
   // 处理 OPTIONS 预检请求
   if (event.httpMethod === 'OPTIONS') {
     return {
@@ -250,11 +28,9 @@ exports.handler = async (event, context) => {
   }
 
   // 从路径中提取代理类型和路径
-  // 路径格式: /.netlify/functions/proxy/[type]/[path] 或 /api/proxy/[type]/[path]
   let path = event.path
   console.log('[Proxy] 原始路径:', path)
   console.log('[Proxy] 查询参数:', JSON.stringify(event.queryStringParameters))
-  console.log('[Proxy] 原始查询字符串:', event.rawQuery)
   
   // 移除 /.netlify/functions/proxy 前缀
   if (path.startsWith('/.netlify/functions/proxy')) {
@@ -264,7 +40,6 @@ exports.handler = async (event, context) => {
   if (path.startsWith('/api/proxy')) {
     path = path.replace(/^\/api\/proxy\/?/, '')
   }
-  // 移除开头的斜杠
   path = path.replace(/^\//, '')
   const pathParts = path.split('/').filter(Boolean)
   
@@ -287,19 +62,15 @@ exports.handler = async (event, context) => {
   const proxyType = pathParts[0]
   
   // 处理路径和查询参数
-  // 路径可能包含查询参数（如 /path?param=value）
   let targetPath = '/' + pathParts.slice(1).join('/')
   let queryString = ''
   
-  // 检查路径中是否包含查询参数
   const pathQueryIndex = targetPath.indexOf('?')
   if (pathQueryIndex !== -1) {
-    // 路径中包含查询参数，分离出来
     queryString = targetPath.substring(pathQueryIndex)
     targetPath = targetPath.substring(0, pathQueryIndex)
   }
   
-  // 如果路径中没有查询参数，使用 event 中的查询参数
   if (!queryString) {
     if (event.rawQuery) {
       queryString = '?' + event.rawQuery
@@ -346,7 +117,7 @@ exports.handler = async (event, context) => {
   try {
     // 构建请求头
     const headers = {
-      ...commonHeaders,
+      ...COMMON_HEADERS,
       ...(config.headers || {}),
     }
 
@@ -359,7 +130,7 @@ exports.handler = async (event, context) => {
       }
     }
 
-    // 处理 Cookie（如果有）
+    // 处理 Cookie
     if (event.headers['x-forwarded-cookie']) {
       headers['cookie'] = event.headers['x-forwarded-cookie']
     }
@@ -383,14 +154,16 @@ exports.handler = async (event, context) => {
     console.log('[Proxy] 响应状态:', response.status)
     console.log('[Proxy] 响应 Content-Type:', response.headers.get('content-type'))
     console.log('[Proxy] 响应内容长度:', responseText.length)
-    console.log('[Proxy] 响应内容预览:', responseText.substring(0, 200))
 
-    // 检查是否是 HTML 错误页面
-    if (responseText.trim().startsWith('<!doctype') || 
+    // 检查是否是 HTML 响应
+    const isHtml = responseText.trim().startsWith('<!doctype') || 
         responseText.trim().startsWith('<!DOCTYPE') || 
-        responseText.trim().startsWith('<html')) {
-      console.error('[Proxy Error] 收到 HTML 错误页面:', targetUrl, '状态码:', response.status)
-      console.error('[Proxy Error] HTML 内容:', responseText.substring(0, 1000))
+        responseText.trim().startsWith('<html')
+
+    if (isHtml && !config.allowHtml) {
+      // 该目标不应返回 HTML，记录错误
+      console.error('[Proxy Error] 收到意外 HTML 响应:', targetUrl, '状态码:', response.status)
+      console.error('[Proxy Error] HTML 内容预览:', responseText.substring(0, 500))
       return {
         statusCode: response.status || 500,
         headers: {
@@ -414,7 +187,6 @@ exports.handler = async (event, context) => {
       'Access-Control-Allow-Headers': 'Content-Type, Authorization, X-Forwarded-Cookie',
     }
 
-    // 复制响应头
     const contentType = response.headers.get('content-type')
     if (contentType) {
       responseHeaders['Content-Type'] = contentType
